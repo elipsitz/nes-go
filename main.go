@@ -44,8 +44,5 @@ func main() {
 	nes.cpu.PC = nes.getVectorReset()
 	fmt.Println("resetting PC to", nes.cpu.PC)
 
-	for i := 0; i < 10; i++ {
-		fmt.Printf("%#X\n", nes.read_byte(nes.cpu.PC + address(i)))
-	}
-
+	nes.cpu.emulate(100)
 }
