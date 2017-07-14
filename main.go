@@ -27,10 +27,10 @@ func main() {
 
 	var prg_rom_size, chr_rom_size int = int(header[4]) * 16384, int(header[5]) * 8192;
 	prg_rom, chr_rom := make([]byte, prg_rom_size), make([]byte, chr_rom_size)
-	n, err := io.ReadFull(r, prg_rom)
-	n, err = io.ReadFull(r, chr_rom)
-
-	fmt.Println(n)
+	_, err = io.ReadFull(r, prg_rom)
+	check(err)
+	_, err = io.ReadFull(r, chr_rom)
+	check(err)
 	f.Close()
 
 
@@ -38,11 +38,14 @@ func main() {
 		prg_rom: prg_rom,
 		chr_rom: chr_rom,
 	}
-	nes.cpu = NewCpu6502(&nes)
+	nes.cpu = NewCpu(&nes)
 
 	// boot up
 	nes.cpu.PC = nes.getVectorReset()
 	fmt.Println("resetting PC to", nes.cpu.PC)
 
-	nes.cpu.emulate(100)
+	for i := 0; i < 50000; i++ {
+		nes.cpu.Emulate(1)
+		nes.ppu.Emulate(3)
+	}
 }

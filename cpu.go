@@ -25,7 +25,7 @@ type Cpu struct {
 	status_N bool // negative
 }
 
-func NewCpu6502(nes *Nes) Cpu {
+func NewCpu(nes *Nes) Cpu {
 	return Cpu{
 		nes: nes,
 		A: 0,
@@ -37,11 +37,11 @@ func NewCpu6502(nes *Nes) Cpu {
 	}
 }
 
-func (cpu *Cpu) emulate(cycles int) {
+func (cpu *Cpu) Emulate(cycles int) {
 	cycles_left := cycles
 	for cycles_left > 0 {
 		opcode := cpu.nes.read_byte(cpu.PC)
-		fmt.Printf("reading from $%X : opcode $%X\n", cpu.PC, opcode)
+		// fmt.Printf("reading from $%X : opcode $%X\n", cpu.PC, opcode)
 
 		switch opcode {
 		case 0x78:
