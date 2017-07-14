@@ -1,6 +1,9 @@
 package main
 
-import "fmt"
+import (
+	"fmt"
+	"time"
+)
 
 type address uint16
 
@@ -58,10 +61,50 @@ func (cpu *Cpu6502) emulate(cycles int) {
 			cpu.status_N = (cpu.A & 0x80) > 0;
 			cpu.PC += 2
 			cycles_left -= 2
+		case 0xAD:
+			// LDA - Load Accumulator (Absolute)
+			addr := address(cpu.nes.read_uint16(cpu.PC + 1))
+			cpu.A = cpu.nes.read_byte(addr)
+			cpu.status_Z = cpu.A == 0
+			cpu.status_N = (cpu.A & 0x80) > 0;
+			cpu.PC += 3
+			cycles_left -= 4
 		case 0x8D:
 			// STA - Store Accumulator (Absolute)
-
+			addr := address(cpu.nes.read_uint16(cpu.PC + 1))
+			cpu.nes.write_byte(addr, cpu.A)
+			cpu.PC += 3
+			cycles_left -= 4
+		case 0xA2:
+			// LDX - Load X Register (Immediate)
+			cpu.X = cpu.nes.read_byte(cpu.PC + 1)
+			cpu.status_Z = cpu.X == 0
+			cpu.status_N = (cpu.X & 0x80) > 0;
+			cpu.PC += 2
+			cycles_left -= 2
+		case 0x9A:
+			// TXS - Transfer X to Stack Pointer
+			cpu.SP = cpu.X
+			cpu.PC += 1
+			cycles_left -= 2
+		case 0x29:
+			// AND - Logical AND (Immediate)
+			data := cpu.nes.read_byte(cpu.PC + 1)
+			cpu.A = cpu.A & data
+			cpu.status_Z = cpu.A == 0
+			cpu.status_N = (cpu.A & 0x80) > 0;
+			cpu.PC += 2
+			cycles_left -= 2
+		case 0xF0:
+			// BEQ - Branch if Equal
+			if cpu.status_Z {
+				var offset int8 = int8(cpu.nes.read_byte(cpu.PC + 1))
+				cpu.PC = address(int32(cpu.PC) + int32(offset))
+			}
+			cpu.PC += 2
+			cycles_left -= 2 // XXX CHECK THIS
 		default:
+			time.Sleep(100000000)
 			panic(fmt.Sprintf("Unknown Opcode! $%X", opcode))
 		}
 	}
