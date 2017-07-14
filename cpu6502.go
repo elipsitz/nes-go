@@ -1,9 +1,15 @@
 package main
 
+type address uint16
+
 type Cpu6502 struct {
-	A uint8 // Accumulator
-	X uint8 // X index
-	Y uint8 // Y index
+	nes *Nes
+
+	A  byte    // Accumulator
+	X  byte    // X index
+	Y  byte    // Y index
+	PC address // program counter
+	SP byte    // stack pointer
 
 	status_C bool // "Carry"
 	status_Z bool // "Zero"
@@ -12,7 +18,16 @@ type Cpu6502 struct {
 	status_B bool // BRK software interrupt
 	status_V bool // Overflow
 	status_S bool // sign
+}
 
-	PC uint16 // program counter
-	SP uint8  // stack pointer
+func NewCpu6502(nes *Nes) Cpu6502 {
+	return Cpu6502{
+		nes: nes,
+		A: 0,
+		X: 0,
+		Y: 0,
+		SP: 0xFD,
+		status_I: true,
+		status_B: true,
+	}
 }
