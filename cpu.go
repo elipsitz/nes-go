@@ -7,7 +7,7 @@ import (
 
 type address uint16
 
-type Cpu6502 struct {
+type Cpu struct {
 	nes *Nes
 
 	A  byte    // Accumulator
@@ -25,8 +25,8 @@ type Cpu6502 struct {
 	status_N bool // negative
 }
 
-func NewCpu6502(nes *Nes) Cpu6502 {
-	return Cpu6502{
+func NewCpu6502(nes *Nes) Cpu {
+	return Cpu{
 		nes: nes,
 		A: 0,
 		X: 0,
@@ -37,7 +37,7 @@ func NewCpu6502(nes *Nes) Cpu6502 {
 	}
 }
 
-func (cpu *Cpu6502) emulate(cycles int) {
+func (cpu *Cpu) emulate(cycles int) {
 	cycles_left := cycles
 	for cycles_left > 0 {
 		opcode := cpu.nes.read_byte(cpu.PC)

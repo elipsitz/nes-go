@@ -3,7 +3,7 @@ package main
 import "fmt"
 
 type Nes struct {
-	cpu Cpu6502
+	cpu Cpu
 
 	ram [2048]byte
 	prg_rom []byte
