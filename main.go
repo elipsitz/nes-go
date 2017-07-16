@@ -7,6 +7,8 @@ import (
 	"bufio"
 	"time"
 	"hash/crc32"
+	"github.com/veandco/go-sdl2/sdl"
+	"math/rand"
 )
 
 func check(e error) {
@@ -31,6 +33,62 @@ func logline(line string) {
 			}
 		}
 		fmt.Println(reference)
+	}
+}
+
+var surface *sdl.Surface
+var window *sdl.Window
+
+var nes *Nes
+
+func sdlInit() {
+	var err error
+	sdl.Init(sdl.INIT_EVERYTHING)
+	window, err = sdl.CreateWindow("aeNES", sdl.WINDOWPOS_UNDEFINED, sdl.WINDOWPOS_UNDEFINED, 256, 240, sdl.WINDOW_SHOWN)
+	check(err)
+
+	surface, err = window.GetSurface()
+	check(err)
+}
+
+func sdlLoop() {
+	nesLoop()
+
+	var event sdl.Event
+	running := true
+	for running {
+		for event = sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
+			switch t := event.(type) {
+			case *sdl.QuitEvent:
+				running = false
+			case *sdl.MouseMotionEvent:
+				fmt.Printf("[%d ms] MouseMotion\ttype:%d\tid:%d\tx:%d\ty:%d\txrel:%d\tyrel:%d\n",
+					t.Timestamp, t.Type, t.Which, t.X, t.Y, t.XRel, t.YRel)
+			}
+		}
+
+		nesLoop()
+		sdl.Delay(16)
+	}
+}
+
+func sdlCleanup() {
+	window.Destroy()
+	sdl.Quit()
+}
+
+func nesLoop() {
+	surface.Lock()
+	for i := 0; i < len(surface.Pixels()); i++ {
+		surface.Pixels()[i] = byte(rand.Int());
+	}
+	window.UpdateSurface()
+
+	// NES clock rate
+	clock := 1789773
+	for i := 0; i < clock / 60; i++ {
+		nes.cpu.Emulate(1)
+		nes.ppu.Emulate(3)
 	}
 }
 
@@ -61,20 +119,19 @@ func main() {
 	fmt.Printf("PRG CRC32: %.8X, CHR CRC32: %.8X\n", crc32.ChecksumIEEE(prg_rom), crc32.ChecksumIEEE(chr_rom))
 	fmt.Printf("Combined CRC32: %.8X\n", crc32.ChecksumIEEE(append(prg_rom, chr_rom...)))
 
-	nes := Nes{
+	nes = &Nes{
 		prg_rom: prg_rom,
 		chr_rom: chr_rom,
 	}
-	nes.cpu = NewCpu(&nes)
-	nes.ppu = NewPpu(&nes)
+	nes.cpu = NewCpu(nes)
+	nes.ppu = NewPpu(nes)
 
 	// boot up
 	nes.cpu.PC = nes.getVectorReset()
 	fmt.Printf("resetting PC to $%.4X\n", nes.cpu.PC)
 	// nes.cpu.PC = 0xC000
 
-	for i := 0; i < 40000; i++ {
-		nes.cpu.Emulate(1)
-		nes.ppu.Emulate(3)
-	}
+	sdlInit()
+	sdlLoop()
+	sdlCleanup()
 }

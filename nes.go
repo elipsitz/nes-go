@@ -40,7 +40,7 @@ func (nes *Nes) read_byte(addr address) byte {
 		return nes.prg_rom[addr - 0xC000]
 	}
 
-	fmt.Println("shouldn't reach this point")
+	fmt.Println("shouldn't reach this point: %.4X", addr)
 	return 0 // shouldn't reach this point
 }
 

@@ -6,6 +6,7 @@ type Ppu struct {
 	warmupRemaining int
 	scanlineCounter int
 	tickCounter     int
+	frameCounter	int
 
 	status_vBlank bool
 	status_sprite0Hit bool
@@ -18,6 +19,7 @@ func NewPpu(nes *Nes) Ppu {
 		warmupRemaining: 29658 * 3,
 		scanlineCounter: -1, // counts scanlines in a frame ( https://wiki.nesdev.com/w/index.php/PPU_rendering#Line-by-line_timing )
 		tickCounter:     0,  // counts clock cycle ticks in a scanline
+		frameCounter:    0,  // counts total frames (vblanks)
 
 		status_vBlank: false, // XXX maybe make flags
 	}
@@ -77,6 +79,7 @@ func (ppu *Ppu) Emulate(cycles int) {
 			// VBLANK
 			ppu.nes.cpu.pendingNmiInterrupt = true
 			ppu.status_vBlank = true
+			ppu.frameCounter += 1
 		}
 
 		cycles_left--;
