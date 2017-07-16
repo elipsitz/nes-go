@@ -16,7 +16,7 @@ func (nes *Nes) read_byte(addr address) byte {
 
 	if addr <= 0x1FFF {
 		// internal ram
-		return nes.ram[addr & 0x0800]
+		return nes.ram[addr & 0x07FF]
 	} else if addr <= 0x3FFF {
 
 		// fmt.Printf("reading from PPU register $%x\n", addr)
@@ -45,8 +45,10 @@ func (nes *Nes) read_byte(addr address) byte {
 }
 
 func (nes *Nes) write_byte(addr address, data byte) {
+	// fmt.Println("mem write", addr, data)
+
 	if addr <= 0x1FFF {
-		nes.ram[addr & 0x0800] = data;
+		nes.ram[addr & 0x07FF] = data;
 	} else if addr <= 0x3FFF {
 		// TODO PPU registers
 		// fmt.Printf("writing $%x to PPU register $%x\n", data, addr)
