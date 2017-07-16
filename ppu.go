@@ -8,6 +8,8 @@ type Ppu struct {
 	tickCounter     int
 
 	status_vBlank bool
+	status_sprite0Hit bool
+	status_spriteOverflow bool
 }
 
 func NewPpu(nes *Nes) Ppu {
@@ -36,7 +38,9 @@ func (ppu *Ppu) ReadRegister (register int) byte {
 }
 
 func (ppu *Ppu) WriteRegister (register int, data byte) {
-
+	if register == 0 {
+		// fmt.Printf("%X , %b\n", data, data)
+	}
 }
 
 func (ppu *Ppu) Emulate(cycles int) {
@@ -62,9 +66,16 @@ func (ppu *Ppu) Emulate(cycles int) {
 			}
 		}
 
+		if ppu.scanlineCounter == -1 && ppu.tickCounter == 1 {
+			// prerender
+			ppu.status_sprite0Hit = false
+			ppu.status_vBlank = false
+			ppu.status_spriteOverflow = false
+		}
+
 		if ppu.scanlineCounter == 241 && ppu.tickCounter == 1 {
 			// VBLANK
-			// TODO NMI interrupt
+			ppu.nes.cpu.pendingNmiInterrupt = true
 			ppu.status_vBlank = true
 		}
 

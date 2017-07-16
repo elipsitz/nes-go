@@ -23,6 +23,8 @@ type Cpu struct {
 	status_B bool // BRK software interrupt
 	status_V bool // Overflow
 	status_N bool // negative
+
+	pendingNmiInterrupt bool
 }
 
 func NewCpu(nes *Nes) Cpu {
@@ -155,13 +157,24 @@ func (cpu *Cpu) read_uint16_buggy(addr address) uint16 {
 	return uint16(high) << 8 | uint16(low)
 }
 
+func (cpu *Cpu) handleInterrupt(addr address) {
+	cpu.stackPush(byte((cpu.PC >> 8) & 0xFF))
+	cpu.stackPush(byte(cpu.PC & 0xFF))
+	cpu.stackPush(cpu.statusPack())
+	cpu.PC = addr
+}
+
 // emulate for at least `cycles` cycles -- returns number of cycles actually emulated for
 func (cpu *Cpu) Emulate(cycles int) int {
 	cycles_left := cycles
 	for cycles_left > 0 {
+		if cpu.pendingNmiInterrupt {
+			cpu.pendingNmiInterrupt = false
+			cpu.handleInterrupt(cpu.nes.getVectorNMI())
+		}
 		opcode := cpu.nes.read_byte(cpu.PC)
 
-		logline(fmt.Sprintf("%.4X  %.2X________________________________________A:%.2X X:%.2X Y:%.2X P:%.2X SP:%.2X CYC:___", cpu.PC, opcode, cpu.A, cpu.X, cpu.Y, cpu.statusPack() & 0xEF, cpu.SP))
+		// logline(fmt.Sprintf("%.4X  %.2X________________________________________A:%.2X X:%.2X Y:%.2X P:%.2X SP:%.2X CYC:___", cpu.PC, opcode, cpu.A, cpu.X, cpu.Y, cpu.statusPack() & 0xEF, cpu.SP))
 
 		if opcode & 0x3 == 1 {
 			var size, cycles int
@@ -701,7 +714,7 @@ func (cpu *Cpu) Emulate(cycles int) int {
 		}
 
 		time.Sleep(100000000)
-		panic(fmt.Sprintf("Unknown Opcode! $%X", opcode))
+		panic(fmt.Sprintf("Unknown Opcode at $%.4X $%.2X", cpu.PC, opcode))
 	}
 
 	return cycles - cycles_left

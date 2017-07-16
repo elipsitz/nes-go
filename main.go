@@ -6,6 +6,7 @@ import (
 	"io"
 	"bufio"
 	"time"
+	"hash/crc32"
 )
 
 func check(e error) {
@@ -16,6 +17,8 @@ func check(e error) {
 
 var referenceLog *bufio.Scanner
 func logline(line string) {
+	fmt.Println(line)
+	return
 	if referenceLog.Scan() {
 		reference := referenceLog.Text()
 		for i := 0; i < len(reference); i++ {
@@ -34,7 +37,7 @@ func logline(line string) {
 func main() {
 	fmt.Println("aeNES")
 
-	f, err := os.Open("roms/nestest.nes")
+	f, err := os.Open("roms/Donkey Kong.nes")
 	check(err)
 	r := f
 
@@ -55,18 +58,22 @@ func main() {
 	check(err)
 	f.Close()
 
+	fmt.Printf("PRG CRC32: %.8X, CHR CRC32: %.8X\n", crc32.ChecksumIEEE(prg_rom), crc32.ChecksumIEEE(chr_rom))
+	fmt.Printf("Combined CRC32: %.8X\n", crc32.ChecksumIEEE(append(prg_rom, chr_rom...)))
+
 	nes := Nes{
 		prg_rom: prg_rom,
 		chr_rom: chr_rom,
 	}
 	nes.cpu = NewCpu(&nes)
+	nes.ppu = NewPpu(&nes)
 
 	// boot up
 	nes.cpu.PC = nes.getVectorReset()
-	fmt.Println("resetting PC to", nes.cpu.PC)
-	nes.cpu.PC = 0xC000
+	fmt.Printf("resetting PC to $%.4X\n", nes.cpu.PC)
+	// nes.cpu.PC = 0xC000
 
-	for i := 0; i < 10000; i++ {
+	for i := 0; i < 40000; i++ {
 		nes.cpu.Emulate(1)
 		nes.ppu.Emulate(3)
 	}

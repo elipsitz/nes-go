@@ -41,7 +41,7 @@ func (nes *Nes) read_byte(addr address) byte {
 	}
 
 	fmt.Println("shouldn't reach this point")
-	return 0; // shouldn't reach this point
+	return 0 // shouldn't reach this point
 }
 
 func (nes *Nes) write_byte(addr address, data byte) {
@@ -50,8 +50,6 @@ func (nes *Nes) write_byte(addr address, data byte) {
 	if addr <= 0x1FFF {
 		nes.ram[addr & 0x07FF] = data;
 	} else if addr <= 0x3FFF {
-		// TODO PPU registers
-		// fmt.Printf("writing $%x to PPU register $%x\n", data, addr)
 		nes.ppu.WriteRegister(int(addr & 0x7), data)
 	}
 	// TODO complete
