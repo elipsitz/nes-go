@@ -4,10 +4,10 @@ type address uint16
 type color uint32
 
 type Nes struct {
-	cpu *Cpu
-	ppu *Ppu
+	cpu       *Cpu
+	ppu       *Ppu
 	cartridge *Cartridge
-	mapper Mapper
+	mapper    Mapper
 
 	ram [2048]byte
 }

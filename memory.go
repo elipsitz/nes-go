@@ -6,7 +6,7 @@ type Memory interface {
 }
 
 func ReadUint16(m Memory, addr address) uint16 {
-	return uint16(m.Read(addr)) | (uint16(m.Read(addr + 1)) << 8)
+	return uint16(m.Read(addr)) | (uint16(m.Read(addr+1)) << 8)
 }
 
 type CPUMemory struct {
@@ -17,7 +17,7 @@ func (*CPUMemory) Read(addr address) byte {
 	// see https://wiki.nesdev.com/w/index.php/CPU_memory_map
 	switch {
 	case addr <= 0x1FFF:
-		return nes.ram[addr & 0x07FF]
+		return nes.ram[addr&0x07FF]
 	case addr <= 0x3FFF:
 		return nes.ppu.ReadRegister(int(addr & 0x7))
 	case addr <= 0x4017:
@@ -36,9 +36,9 @@ func (*CPUMemory) Write(addr address, data byte) {
 
 	switch {
 	case addr <= 0x1FFF:
-		nes.ram[addr & 0x07FF] = data
+		nes.ram[addr&0x07FF] = data
 	case addr <= 0x3FFF:
-		nes.ppu.WriteRegister(int(addr & 0x7), data)
+		nes.ppu.WriteRegister(int(addr&0x7), data)
 	case addr == 0x4014:
 		// OAMDMA
 		nes.ppu.WriteRegister(0x4014, data)
@@ -80,7 +80,7 @@ func (*PPUMemory) Write(addr address, data byte) {
 		nes.mapper.Write(addr, data)
 	case addr <= 0x3EFF:
 		// mirrored from 0x2000
-		nes.mapper.Write(addr - 0x1000, data)
+		nes.mapper.Write(addr-0x1000, data)
 	case addr <= 0x3FFF:
 		index := addr & 0x1F
 		nes.ppu.palette[index] = data

@@ -24,7 +24,7 @@ func LoadCartridge(path string) *Cartridge {
 	_, err = io.ReadFull(r, cartridge.header)
 	check(err)
 
-	var prgSize, chrSize int = int(cartridge.header[4]) * 16384, int(cartridge.header[5]) * 8192;
+	var prgSize, chrSize int = int(cartridge.header[4])*16384, int(cartridge.header[5])*8192;
 	cartridge.prg, cartridge.chr = make([]byte, prgSize), make([]byte, chrSize)
 	_, err = io.ReadFull(r, cartridge.prg)
 	check(err)
@@ -39,6 +39,6 @@ func LoadCartridge(path string) *Cartridge {
 
 func (cartridge *Cartridge) CRC32() (prg, chr, total uint32) {
 	prg, chr = crc32.ChecksumIEEE(cartridge.prg), crc32.ChecksumIEEE(cartridge.chr)
-	total = crc32.ChecksumIEEE(append(cartridge.prg, cartridge. chr...))
+	total = crc32.ChecksumIEEE(append(cartridge.prg, cartridge.chr...))
 	return
 }

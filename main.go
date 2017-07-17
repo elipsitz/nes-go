@@ -14,6 +14,7 @@ func check(e error) {
 }
 
 var referenceLog *bufio.Scanner
+
 func logline(line string) {
 	fmt.Println(line)
 	return
@@ -70,10 +71,10 @@ func sdlLoop() {
 
 func pushPixel(x int, y int, col color) {
 	pixels := surface.Pixels()
-	pixels[4 * (y * int(surface.W) + x) + 0] = byte(col >> 0)
-	pixels[4 * (y * int(surface.W) + x) + 1] = byte(col >> 8)
-	pixels[4 * (y * int(surface.W) + x) + 2] = byte(col >> 16)
-	pixels[4 * (y * int(surface.W) + x) + 3] = byte(col >> 24)
+	pixels[4*(y*int(surface.W)+x)+0] = byte(col >> 0)
+	pixels[4*(y*int(surface.W)+x)+1] = byte(col >> 8)
+	pixels[4*(y*int(surface.W)+x)+2] = byte(col >> 16)
+	pixels[4*(y*int(surface.W)+x)+3] = byte(col >> 24)
 }
 
 func pushFrame() {
@@ -88,7 +89,7 @@ func sdlCleanup() {
 func nesLoop() {
 	// NES clock rate
 	clock := 1789773
-	for i := 0; i < clock / 60; i++ {
+	for i := 0; i < clock/60; i++ {
 		nes.cpu.Emulate(1)
 		nes.ppu.Emulate(3)
 	}
