@@ -13,8 +13,8 @@ type Ppu struct {
 	status_spriteOverflow bool
 }
 
-func NewPpu(nes *Nes) Ppu {
-	return Ppu{
+func NewPpu(nes *Nes) *Ppu {
+	return &Ppu{
 		nes:             nes,
 		warmupRemaining: 29658 * 3,
 		scanlineCounter: -1, // counts scanlines in a frame ( https://wiki.nesdev.com/w/index.php/PPU_rendering#Line-by-line_timing )

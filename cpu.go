@@ -9,6 +9,7 @@ type address uint16
 
 type Cpu struct {
 	nes *Nes
+	mem Memory
 
 	A  byte    // Accumulator
 	X  byte    // X index
@@ -27,9 +28,10 @@ type Cpu struct {
 	pendingNmiInterrupt bool
 }
 
-func NewCpu(nes *Nes) Cpu {
-	return Cpu{
+func NewCpu(nes *Nes) *Cpu {
+	return &Cpu{
 		nes: nes,
+		mem: &CPUMemory{nes: nes},
 		A: 0,
 		X: 0,
 		Y: 0,
@@ -39,79 +41,92 @@ func NewCpu(nes *Nes) Cpu {
 	}
 }
 
+// interrupt vectors
+func (cpu *Cpu) getVectorReset() address {
+	return address(ReadUint16(cpu.mem, 0xFFFC))
+}
+
+func (cpu *Cpu) getVectorNMI() address {
+	return address(ReadUint16(cpu.mem, 0xFFFA))
+}
+
+func (cpu *Cpu) getVectorBRK() address {
+	return address(ReadUint16(cpu.mem, 0xFFFE))
+}
+
 // these return (address, instruction size in bytes, [page crossed?])
 func (cpu *Cpu) addressImmediate() (address, int) {
 	return cpu.PC + 1, 2
 }
 
 func (cpu *Cpu) addressZeroPage() (address, int) {
-	return address(cpu.nes.read_byte(cpu.PC + 1)), 2
+	return address(cpu.mem.Read(cpu.PC + 1)), 2
 }
 
 func (cpu *Cpu) addressZeroPageX() (address, int) {
-	return address((cpu.nes.read_byte(cpu.PC + 1) + cpu.X) & 0xFF), 2
+	return address((cpu.mem.Read(cpu.PC + 1) + cpu.X) & 0xFF), 2
 }
 
 func (cpu *Cpu) addressZeroPageY() (address, int) {
-	return address((cpu.nes.read_byte(cpu.PC + 1) + cpu.Y) & 0xFF), 2
+	return address((cpu.mem.Read(cpu.PC + 1) + cpu.Y) & 0xFF), 2
 }
 
 func (cpu *Cpu) addressRelative() (address, int) {
-	var offset int8 = int8(cpu.nes.read_byte(cpu.PC + 1))
+	var offset int8 = int8(cpu.mem.Read(cpu.PC + 1))
 	return address(int32(cpu.PC) + int32(offset)), 2
 }
 
 func (cpu *Cpu) addressAbsolute() (address, int) {
-	return address(cpu.nes.read_uint16(cpu.PC + 1)), 3
+	return address(ReadUint16(cpu.mem, cpu.PC + 1)), 3
 }
 
 func (cpu *Cpu) addressAbsoluteX() (address, int, bool) {
-	addr := address(cpu.nes.read_uint16(cpu.PC + 1) + uint16(cpu.X))
+	addr := address(ReadUint16(cpu.mem, cpu.PC + 1) + uint16(cpu.X))
 
 	pageCrossed := false
 	if uint16(addr & 0xFF) + uint16(cpu.X) > 255 {
-		cpu.nes.read_byte(addr)
+		cpu.mem.Read(addr)
 		pageCrossed = true
 	}
 	return addr, 3, pageCrossed
 }
 
 func (cpu *Cpu) addressAbsoluteY() (address, int, bool) {
-	addr := address(cpu.nes.read_uint16(cpu.PC + 1) + uint16(cpu.Y))
+	addr := address(ReadUint16(cpu.mem, cpu.PC + 1) + uint16(cpu.Y))
 
 	pageCrossed := false
 	if uint16(addr & 0xFF) + uint16(cpu.X) > 255 {
-		cpu.nes.read_byte(addr)
+		cpu.mem.Read(addr)
 		pageCrossed = true
 	}
 	return addr, 3, pageCrossed
 }
 
 func (cpu *Cpu) addressIndirectX() (address, int) {
-	addr := address((cpu.nes.read_byte(cpu.PC + 1) + cpu.X) & 0xFF)
+	addr := address((cpu.mem.Read(cpu.PC + 1) + cpu.X) & 0xFF)
 	return address(cpu.read_uint16_buggy(addr)), 2
 }
 
 func (cpu *Cpu) addressIndirectY() (address, int, bool) {
-	addr := address(cpu.nes.read_byte(cpu.PC + 1))
+	addr := address(cpu.mem.Read(cpu.PC + 1))
 	addr = address(cpu.read_uint16_buggy(addr) + uint16(cpu.Y))
 
 	pageCrossed := false
 	if uint16(addr & 0xFF) + uint16(cpu.Y) > 255 {
-		cpu.nes.read_byte(addr) // ? is this right?
+		cpu.mem.Read(addr) // ? is this right?
 		pageCrossed = true
 	}
 	return addr, 2, pageCrossed
 }
 
 func (cpu *Cpu) stackPush(data byte) {
-	cpu.nes.write_byte(address(0x0100 + uint16(cpu.SP)), data)
+	cpu.mem.Write(address(0x0100 + uint16(cpu.SP)), data)
 	cpu.SP--
 }
 
 func (cpu *Cpu) stackPull() (byte) {
 	cpu.SP++
-	return cpu.nes.read_byte(address(0x0100 + uint16(cpu.SP)))
+	return cpu.mem.Read(address(0x0100 + uint16(cpu.SP)))
 }
 
 func (cpu *Cpu) statusPack() (data byte) {
@@ -152,8 +167,8 @@ func (cpu *Cpu) statusUnpack(data byte) {
 }
 
 func (cpu *Cpu) read_uint16_buggy(addr address) uint16 {
-	low := cpu.nes.read_byte(addr)
-	high := cpu.nes.read_byte((addr & 0xFF00) | address(byte(addr) + 1))
+	low := cpu.mem.Read(addr)
+	high := cpu.mem.Read((addr & 0xFF00) | address(byte(addr) + 1))
 	return uint16(high) << 8 | uint16(low)
 }
 
@@ -170,9 +185,9 @@ func (cpu *Cpu) Emulate(cycles int) int {
 	for cycles_left > 0 {
 		if cpu.pendingNmiInterrupt {
 			cpu.pendingNmiInterrupt = false
-			cpu.handleInterrupt(cpu.nes.getVectorNMI())
+			cpu.handleInterrupt(cpu.getVectorNMI())
 		}
-		opcode := cpu.nes.read_byte(cpu.PC)
+		opcode := cpu.mem.Read(cpu.PC)
 
 		// logline(fmt.Sprintf("%.4X  %.2X________________________________________A:%.2X X:%.2X Y:%.2X P:%.2X SP:%.2X CYC:___", cpu.PC, opcode, cpu.A, cpu.X, cpu.Y, cpu.statusPack() & 0xEF, cpu.SP))
 
@@ -221,16 +236,16 @@ func (cpu *Cpu) Emulate(cycles int) int {
 			switch instructionType {
 			case 0:
 				// ORA - Logical Inclusive OR
-				cpu.A |= cpu.nes.read_byte(addr)
+				cpu.A |= cpu.mem.Read(addr)
 			case 1:
 				// AND - Logical AND
-				cpu.A &= cpu.nes.read_byte(addr)
+				cpu.A &= cpu.mem.Read(addr)
 			case 2:
 				// EOR - Exclusive OR
-				cpu.A ^= cpu.nes.read_byte(addr)
+				cpu.A ^= cpu.mem.Read(addr)
 			case 3:
 				// ADC - Add with Carry
-				var op1, op2 byte = cpu.A, cpu.nes.read_byte(addr)
+				var op1, op2 byte = cpu.A, cpu.mem.Read(addr)
 				var val uint16 = uint16(op1) + uint16(op2)
 				if cpu.status_C {
 					val += 1
@@ -240,19 +255,19 @@ func (cpu *Cpu) Emulate(cycles int) int {
 				cpu.status_V = ((op1 & 0x80 > 0) && (op2 & 0x80 > 0) && (cpu.A & 0x80 == 0)) ||  ((op1 & 0x80 == 0) && (op2 & 0x80 == 0) && (cpu.A & 0x80 > 0))
 			case 4:
 				// STA - Store Accumulator
-				cpu.nes.write_byte(addr, cpu.A)
+				cpu.mem.Write(addr, cpu.A)
 			case 5:
 				// LDA - Load Accumulator
-				cpu.A = cpu.nes.read_byte(addr)
+				cpu.A = cpu.mem.Read(addr)
 			case 6:
 				// CMP - Compare
-				data := cpu.nes.read_byte(addr)
+				data := cpu.mem.Read(addr)
 				cpu.status_C = cpu.A >= data
 				cpu.status_Z = cpu.A == data
 				cpu.status_N = (cpu.A - data) & 0x80 > 0
 			case 7:
 				// SBC - Subtract With Carry
-				var sub int8 = int8(cpu.nes.read_byte(addr))
+				var sub int8 = int8(cpu.mem.Read(addr))
 				if !cpu.status_C {
 					sub++
 				}
@@ -284,10 +299,10 @@ func (cpu *Cpu) Emulate(cycles int) int {
 			cpu.stackPush(cpu.statusPack())
 			cpu.status_B = true
 			cycles_left -= 7
-			cpu.PC = cpu.nes.getVectorBRK()
+			cpu.PC = cpu.getVectorBRK()
 		case 0x20:
 			// JSR - Jump to Subroutine
-			addr := address(cpu.nes.read_uint16(cpu.PC + 1))
+			addr := address(ReadUint16(cpu.mem, cpu.PC + 1))
 			returnAddr := cpu.PC + 3 - 1 // returnAddr minus one
 			cpu.stackPush(byte((returnAddr >> 8) & 0xFF))
 			cpu.stackPush(byte(returnAddr & 0xFF))
@@ -530,7 +545,7 @@ func (cpu *Cpu) Emulate(cycles int) int {
 
 				var data byte
 				if addressType != 2 {
-					data = cpu.nes.read_byte(addr)
+					data = cpu.mem.Read(addr)
 				} else {
 					data = cpu.A
 				}
@@ -585,7 +600,7 @@ func (cpu *Cpu) Emulate(cycles int) int {
 
 				if addressType != 2 {
 					if instructionType != 5 {
-						cpu.nes.write_byte(addr, data)
+						cpu.mem.Write(addr, data)
 					}
 				} else {
 					cpu.A = data
@@ -623,7 +638,7 @@ func (cpu *Cpu) Emulate(cycles int) int {
 						}
 					} else {
 						// jump indirect
-						addr, size = address(cpu.nes.read_uint16(cpu.PC + 1)), 3
+						addr, size = address(ReadUint16(cpu.mem, cpu.PC + 1)), 3
 						addr = address(cpu.read_uint16_buggy(addr))
 						cycles = 5
 					}
@@ -642,7 +657,7 @@ func (cpu *Cpu) Emulate(cycles int) int {
 				switch instructionType {
 				case 1:
 					// BIT - Bit Test
-					data := cpu.nes.read_byte(addr)
+					data := cpu.mem.Read(addr)
 					cpu.status_Z = (cpu.A & data) == 0
 					cpu.status_V = (data & 0x40) > 0
 					cpu.status_N = (data & 0x80) > 0
@@ -654,21 +669,21 @@ func (cpu *Cpu) Emulate(cycles int) int {
 					cpu.PC = addr
 				case 4:
 					// STY - Store Y Register
-					cpu.nes.write_byte(addr, cpu.Y)
+					cpu.mem.Write(addr, cpu.Y)
 				case 5:
 					// LDY - Load Y Register
-					cpu.Y = cpu.nes.read_byte(addr)
+					cpu.Y = cpu.mem.Read(addr)
 					cpu.status_Z = cpu.Y == 0
 					cpu.status_N = (cpu.Y & 0x80) > 0
 				case 6:
 					// CPY - Compare Y Register
-					data := cpu.nes.read_byte(addr)
+					data := cpu.mem.Read(addr)
 					cpu.status_C = cpu.Y >= data
 					cpu.status_Z = cpu.Y == data
 					cpu.status_N = (cpu.Y - data) & 0x80 > 0
 				case 7:
 					// CPX - Compare X Register
-					data := cpu.nes.read_byte(addr)
+					data := cpu.mem.Read(addr)
 					cpu.status_C = cpu.X >= data
 					cpu.status_Z = cpu.X == data
 					cpu.status_N = (cpu.X - data) & 0x80 > 0
@@ -698,7 +713,7 @@ func (cpu *Cpu) Emulate(cycles int) int {
 			comp := opcode & 0x20 > 0
 
 			if comp == flag {
-				var offset int8 = int8(cpu.nes.read_byte(cpu.PC + 1))
+				var offset int8 = int8(cpu.mem.Read(cpu.PC + 1))
 				destination := address(int32(cpu.PC) + int32(offset)) + 2
 				if destination & 0xFF00 != (cpu.PC + 2) & 0xFF00 {
 					cycles_left -= 4

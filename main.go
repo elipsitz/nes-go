@@ -2,11 +2,8 @@ package main
 
 import (
 	"fmt"
-	"os"
-	"io"
 	"bufio"
 	"time"
-	"hash/crc32"
 	"github.com/veandco/go-sdl2/sdl"
 	"math/rand"
 )
@@ -95,39 +92,10 @@ func nesLoop() {
 func main() {
 	fmt.Println("aeNES")
 
-	f, err := os.Open("roms/Donkey Kong.nes")
-	check(err)
-	r := f
-
-	logFile, _ := os.Open("roms/nestest.log")
-	defer logFile.Close()
-	referenceLog = bufio.NewScanner(logFile)
-
-	header := make([]byte, 16)
-	_, err = io.ReadFull(r, header)
-	check(err)
-
-	var prg_rom_size, chr_rom_size int = int(header[4]) * 16384, int(header[5]) * 8192;
-	fmt.Printf("PRG size: %d, CHR size: %d\n", prg_rom_size, chr_rom_size)
-	prg_rom, chr_rom := make([]byte, prg_rom_size), make([]byte, chr_rom_size)
-	_, err = io.ReadFull(r, prg_rom)
-	check(err)
-	_, err = io.ReadFull(r, chr_rom)
-	check(err)
-	f.Close()
-
-	fmt.Printf("PRG CRC32: %.8X, CHR CRC32: %.8X\n", crc32.ChecksumIEEE(prg_rom), crc32.ChecksumIEEE(chr_rom))
-	fmt.Printf("Combined CRC32: %.8X\n", crc32.ChecksumIEEE(append(prg_rom, chr_rom...)))
-
-	nes = &Nes{
-		prg_rom: prg_rom,
-		chr_rom: chr_rom,
-	}
-	nes.cpu = NewCpu(nes)
-	nes.ppu = NewPpu(nes)
+	nes = NewNes("roms/Donkey Kong.nes")
 
 	// boot up
-	nes.cpu.PC = nes.getVectorReset()
+	nes.cpu.PC = nes.cpu.getVectorReset()
 	fmt.Printf("resetting PC to $%.4X\n", nes.cpu.PC)
 	// nes.cpu.PC = 0xC000
 

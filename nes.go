@@ -1,72 +1,21 @@
 package main
 
-import "fmt"
-
 type Nes struct {
-	cpu Cpu
-	ppu Ppu
+	cpu *Cpu
+	ppu *Ppu
+	cartridge *Cartridge
+	mapper Mapper
 
 	ram [2048]byte
-	prg_rom []byte
-	chr_rom []byte
 }
 
-func (nes *Nes) read_byte(addr address) byte {
-	// see https://wiki.nesdev.com/w/index.php/CPU_memory_map
-
-	if addr <= 0x1FFF {
-		// internal ram
-		return nes.ram[addr & 0x07FF]
-	} else if addr <= 0x3FFF {
-
-		// fmt.Printf("reading from PPU register $%x\n", addr)
-		return nes.ppu.ReadRegister(int(addr & 0x7))
-	} else if addr <= 0x4017 {
-		// TODO NES APU and I/O registers
-		return 0
-	} else if addr <= 0x401F {
-		// CPU test mode (nothing goes here atm)
-		return 0
+func NewNes(romPath string) *Nes {
+	nes := Nes{
+		cartridge: LoadCartridge(romPath),
 	}
+	nes.cpu = NewCpu(&nes)
+	nes.ppu = NewPpu(&nes)
+	nes.mapper = NewMapper(&nes)
 
-	// OTHERWISE MAPPER
-	// TODO mapper
-	// XXX currently hardcoded NROM
-
-	if addr >= 0x8000 && addr <= 0xBFFF {
-		return nes.prg_rom[addr - 0x8000]
-	}
-	if addr >= 0xC000 && addr <= 0xFFFF {
-		return nes.prg_rom[addr - 0xC000]
-	}
-
-	fmt.Println("shouldn't reach this point: %.4X", addr)
-	return 0 // shouldn't reach this point
-}
-
-func (nes *Nes) write_byte(addr address, data byte) {
-	// fmt.Println("mem write", addr, data)
-
-	if addr <= 0x1FFF {
-		nes.ram[addr & 0x07FF] = data;
-	} else if addr <= 0x3FFF {
-		nes.ppu.WriteRegister(int(addr & 0x7), data)
-	}
-	// TODO complete
-}
-
-func (nes *Nes) read_uint16(addr address) uint16 {
-	return uint16(nes.read_byte(addr)) | (uint16(nes.read_byte(addr + 1)) << 8)
-}
-
-func (nes *Nes) getVectorReset() address {
-	return address(nes.read_uint16(0xFFFC))
-}
-
-func (nes *Nes) getVectorNMI() address {
-	return address(nes.read_uint16(0xFFFA))
-}
-
-func (nes *Nes) getVectorBRK() address {
-	return address(nes.read_uint16(0xFFFE))
+	return &nes
 }
