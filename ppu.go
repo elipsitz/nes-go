@@ -14,6 +14,7 @@ type Ppu struct {
 
 	vram [2048]byte
 	oam [256]byte
+	secondary_oam [32]byte
 	palette [32]byte
 	colors [64]color
 
@@ -31,6 +32,16 @@ type Ppu struct {
 	ppuLatch byte
 	addressLatch uint16
 	addressLatchIndex byte
+
+	// sprite rendering
+	spriteEvaluationN int
+	spriteEvaluationM int
+	spriteEvaluationRead byte
+	numScanlineSprites int
+	spriteXCounters [8]int
+	spriteAttributes [8]byte
+	spriteBitmapDataLo [8]byte
+	spriteBitmapDataHi [8]byte
 
 	// PPUCTRL
 	flag_baseNametable byte
@@ -87,6 +98,7 @@ func (ppu *Ppu) ReadRegister (register int) byte {
 		return status
 	case 4:
 		// OAMDATA
+		// TODO if visible scanline and cycle between 1-64, return 0xFF
 		return ppu.oam[ppu.oamAddr]
 		// XXX increment after read during rendering?
 	case 7:
@@ -165,9 +177,11 @@ func (ppu *Ppu) WriteRegister (register int, data byte) {
 	case 0x4014:
 		// OAMDMA
 		// TODO suspend CPU for 513-514 cycles
-		addr := address(data << 8)
+		addr := address(data) << 8
 		for i := 0; i < 256; i++ {
-			ppu.oam[(ppu.oamAddr + byte(i)) & 0xFF] = nes.cpu.mem.Read(addr + address(i))
+			addr2 := addr + address(i)
+			data := nes.cpu.mem.Read(addr2)
+			ppu.oam[(ppu.oamAddr + byte(i)) & 0xFF] = data
 		}
 	}
 }
@@ -201,6 +215,88 @@ func (ppu *Ppu) Emulate(cycles int) {
 		}
 
 		if ppu.scanlineCounter >= 0  && ppu.scanlineCounter < 240 {
+			if ppu.tickCounter >= 1 && ppu.tickCounter <= 64 {
+				// https://wiki.nesdev.com/w/index.php/PPU_sprite_evaluation
+				// Sprite Evaluation Stage 1: Clearing the Secondary OAM
+				if ppu.tickCounter % 2 == 0 {
+					ppu.secondary_oam[(ppu.tickCounter - 1) / 2] = 0xFF
+				}
+			}
+			if ppu.tickCounter == 65 {
+				ppu.spriteEvaluationN = 0
+				ppu.spriteEvaluationM = 0
+				ppu.numScanlineSprites = 0
+			}
+			if ppu.tickCounter >= 65 && ppu.tickCounter <= 256 {
+				// Sprite Evaluation Stage 2: Loading the Secondary OAM
+				if ppu.spriteEvaluationN < 64 && ppu.numScanlineSprites < 8 {
+					if ppu.tickCounter % 2 == 1 {
+						// read from primary
+						ppu.spriteEvaluationRead = ppu.oam[4 * ppu.spriteEvaluationN + ppu.spriteEvaluationM]
+					} else {
+						// write to secondary
+						ppu.secondary_oam[4 * ppu.numScanlineSprites + ppu.spriteEvaluationM] = ppu.spriteEvaluationRead
+						if ppu.spriteEvaluationM == 0 {
+							// check to see if it's in range
+							if byte(ppu.scanlineCounter) >= ppu.spriteEvaluationRead && byte(ppu.scanlineCounter) < ppu.spriteEvaluationRead + 8 {
+								// it's in range!
+							} else {
+								// not in range.
+								ppu.spriteEvaluationM--
+								ppu.spriteEvaluationN++
+							}
+						}
+						if ppu.spriteEvaluationM == 3 {
+							ppu.spriteEvaluationN++
+							ppu.spriteEvaluationM = 0
+							ppu.numScanlineSprites += 1
+						} else {
+							ppu.spriteEvaluationM++
+						}
+					}
+				}
+			}
+			if ppu.tickCounter >= 257 && ppu.tickCounter <= 320 {
+				ppu.spriteEvaluationN = (ppu.tickCounter - 257) / 8
+				if (ppu.tickCounter - 257) % 8 == 0 {
+					// fetch x position, attribute into temporary latches and counters
+					var ypos, tile, attribute, xpos byte
+					if ppu.spriteEvaluationN < ppu.numScanlineSprites {
+						ypos = ppu.secondary_oam[ppu.spriteEvaluationN * 4 + 0]
+						tile = ppu.secondary_oam[ppu.spriteEvaluationN * 4 + 1]
+						attribute = ppu.secondary_oam[ppu.spriteEvaluationN * 4 + 2]
+						xpos = ppu.secondary_oam[ppu.spriteEvaluationN * 4 + 3]
+					} else {
+						ypos, tile, attribute, xpos = 0xFF, 0xFF, 0xFF, 0xFF
+					}
+					ppu.spriteXCounters[ppu.spriteEvaluationN], ppu.spriteAttributes[ppu.spriteEvaluationN] = int(xpos), attribute
+
+					// fetch bitmap data into shift registers
+					var patternAddr address = 0
+					patternAddr |= address(ppu.scanlineCounter - int(ypos))
+					patternAddr |= address(tile) << 4
+					patternAddr |= address(ppu.flag_spriteTableAddress) << 12
+					lo, hi := ppu.mem.Read(patternAddr), ppu.mem.Read(patternAddr + 8)
+
+					// todo flip sprite vertically (if attribute & 0x80 > 0)
+					if attribute & 0x40 > 0 {
+						// flip sprite horizontally
+						var hi2, lo2 byte
+						for i := 0; i < 8; i++ {
+							hi2 = (hi2 << 1) | (hi & 1)
+							lo2 = (lo2 << 1) | (lo & 1)
+							hi >>= 1
+							lo >>= 1
+						}
+						lo, hi = lo2, hi2
+					}
+
+					ppu.spriteBitmapDataLo[ppu.spriteEvaluationN] = lo
+					ppu.spriteBitmapDataHi[ppu.spriteEvaluationN] = hi
+					// TODO just load transparent sprite if there are fewer than 8
+ 				}
+			}
+
 			// drawing!
 			if ppu.tickCounter >= 0 && ppu.tickCounter < 256 {
 				tileX, tileY := ppu.tickCounter / 8, ppu.scanlineCounter / 8
@@ -213,17 +309,38 @@ func (ppu *Ppu) Emulate(cycles int) {
 				patternTableAddressLo |= address(ppu.flag_backgroundTableAddress) << 12
 				patternTableAddressHi := patternTableAddressLo | 0x8
 
-				//fmt.Printf("%.8b %.8b\n", ppu.mem.Read(patternTableAddressLo), ppu.mem.Read(patternTableAddressHi))
 				color := (ppu.mem.Read(patternTableAddressLo) >> byte(7 - (ppu.tickCounter % 8)) & 1) | ((ppu.mem.Read(patternTableAddressHi) >> byte(7 - (ppu.tickCounter % 8)) & 1) << 1)
-				// fmt.Println(color)
 
 				palette := (attributeEntry >> byte(((tileX % 4) / 2) * 2 + ((tileY % 4) / 2) * 4)) & 0x3
-
-				if color != 0 {
-					ppu.funcPushPixel(ppu.tickCounter, ppu.scanlineCounter, ppu.FetchColor(color + (4 * palette)))
-				} else {
-					ppu.funcPushPixel(ppu.tickCounter, ppu.scanlineCounter, ppu.FetchColor(0))
+				paletteEntry := color + (4 * palette)
+				if color == 0 {
+					paletteEntry = 0
 				}
+
+				// TODO sprite 0 hit
+				// check on sprites
+				var spritePaletteEntry byte = 0
+				for n := ppu.numScanlineSprites - 1; n >= 0; n-- {
+					if ppu.spriteXCounters[n] > -8 {
+						ppu.spriteXCounters[n]--
+						if ppu.spriteXCounters[n] <= 0 {
+							// draw this sprite
+							attributes := ppu.spriteAttributes[n]
+							data := ((ppu.spriteBitmapDataHi[n] & 0x80) >> 6) | ((ppu.spriteBitmapDataLo[n] & 0x80) >> 7)
+							ppu.spriteBitmapDataHi[n] <<= 1
+							ppu.spriteBitmapDataLo[n] <<= 1
+							if data != 0 {
+								spritePaletteEntry = 0x10 + data + 4 * (attributes & 0x3)
+							}
+						}
+					}
+				}
+
+				if spritePaletteEntry != 0 {
+					// TODO actual priority calculation
+					paletteEntry = spritePaletteEntry
+				}
+				ppu.funcPushPixel(ppu.tickCounter, ppu.scanlineCounter, ppu.FetchColor(paletteEntry))
 			}
 		}
 
