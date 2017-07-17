@@ -5,7 +5,6 @@ import (
 	"bufio"
 	"time"
 	"github.com/veandco/go-sdl2/sdl"
-	"math/rand"
 )
 
 func check(e error) {
@@ -69,18 +68,24 @@ func sdlLoop() {
 	}
 }
 
+func pushPixel(x int, y int, col color) {
+	pixels := surface.Pixels()
+	pixels[4 * (y * int(surface.W) + x) + 0] = byte(col >> 0)
+	pixels[4 * (y * int(surface.W) + x) + 1] = byte(col >> 8)
+	pixels[4 * (y * int(surface.W) + x) + 2] = byte(col >> 16)
+	pixels[4 * (y * int(surface.W) + x) + 3] = byte(col >> 24)
+}
+
+func pushFrame() {
+	window.UpdateSurface()
+}
+
 func sdlCleanup() {
 	window.Destroy()
 	sdl.Quit()
 }
 
 func nesLoop() {
-	surface.Lock()
-	for i := 0; i < len(surface.Pixels()); i++ {
-		surface.Pixels()[i] = byte(rand.Int());
-	}
-	window.UpdateSurface()
-
 	// NES clock rate
 	clock := 1789773
 	for i := 0; i < clock / 60; i++ {
@@ -93,6 +98,8 @@ func main() {
 	fmt.Println("aeNES")
 
 	nes = NewNes("roms/Donkey Kong.nes")
+	nes.ppu.funcPushFrame = pushFrame
+	nes.ppu.funcPushPixel = pushPixel
 
 	// boot up
 	nes.cpu.PC = nes.cpu.getVectorReset()

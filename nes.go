@@ -1,5 +1,8 @@
 package main
 
+type address uint16
+type color uint32
+
 type Nes struct {
 	cpu *Cpu
 	ppu *Ppu

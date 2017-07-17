@@ -2,63 +2,173 @@ package main
 
 type Ppu struct {
 	nes *Nes
+	mem Memory
+
+	// drawing interfaces
+	funcPushPixel func(int, int, color)
+	funcPushFrame func()
+
+	vram [2048]byte
+	oam [256]byte
+	palette [32]byte
+	colors [64]color
 
 	warmupRemaining int
 	scanlineCounter int
 	tickCounter     int
 	frameCounter	int
+	cycles			uint64
 
-	status_vBlank bool
-	status_sprite0Hit bool
-	status_spriteOverflow bool
+	status_rendering      bool
+	flag_vBlank         byte
+	flag_sprite0Hit     byte
+	flag_spriteOverflow byte
+
+	ppuLatch byte
+	addressLatch uint16
+	addressLatchIndex byte
+
+	// PPUCTRL
+	flag_baseNametable byte
+	flag_incrementVram byte
+	flag_spriteTableAddress byte
+	flag_backgroundTableAddress byte
+	flag_spriteSize	byte
+	flag_masterSlave byte
+	flag_generateNMIs byte
+
+	// PPUMASK
+	flag_grayscale byte
+	flag_showSpritesLeft byte
+	flag_showBackgroundLeft byte
+	flag_renderSprites byte
+	flag_renderBackground byte
+	flag_emphasizeRed byte
+	flag_emphasizeGreen byte
+	flag_emphasizeBlue byte
+
+	scrollPositionX byte
+	scrollPositionY byte
+
+	oamAddr	byte
 }
 
 func NewPpu(nes *Nes) *Ppu {
 	return &Ppu{
 		nes:             nes,
+		mem: &PPUMemory{nes: nes},
 		warmupRemaining: 29658 * 3,
 		scanlineCounter: -1, // counts scanlines in a frame ( https://wiki.nesdev.com/w/index.php/PPU_rendering#Line-by-line_timing )
 		tickCounter:     0,  // counts clock cycle ticks in a scanline
 		frameCounter:    0,  // counts total frames (vblanks)
 
-		status_vBlank: false, // XXX maybe make flags
+		flag_vBlank: 0,
+		colors: [64]color{84 * 256 * 256 + 84 * 256 + 84, 0 * 256 * 256 + 30 * 256 + 116, 8 * 256 * 256 + 16 * 256 + 144, 48 * 256 * 256 + 0 * 256 + 136, 68 * 256 * 256 + 0 * 256 + 100, 92 * 256 * 256 + 0 * 256 + 48, 84 * 256 * 256 + 4 * 256 + 0, 60 * 256 * 256 + 24 * 256 + 0, 32 * 256 * 256 + 42 * 256 + 0, 8 * 256 * 256 + 58 * 256 + 0, 0 * 256 * 256 + 64 * 256 + 0, 0 * 256 * 256 + 60 * 256 + 0, 0 * 256 * 256 + 50 * 256 + 60, 0 * 256 * 256 + 0 * 256 + 0, 0 * 256 * 256 + 0 * 256 + 0, 0 * 256 * 256 + 0 * 256 + 0, 152 * 256 * 256 + 150 * 256 + 152, 8 * 256 * 256 + 76 * 256 + 196, 48 * 256 * 256 + 50 * 256 + 236, 92 * 256 * 256 + 30 * 256 + 228, 136 * 256 * 256 + 20 * 256 + 176, 160 * 256 * 256 + 20 * 256 + 100, 152 * 256 * 256 + 34 * 256 + 32, 120 * 256 * 256 + 60 * 256 + 0, 84 * 256 * 256 + 90 * 256 + 0, 40 * 256 * 256 + 114 * 256 + 0, 8 * 256 * 256 + 124 * 256 + 0, 0 * 256 * 256 + 118 * 256 + 40, 0 * 256 * 256 + 102 * 256 + 120, 0 * 256 * 256 + 0 * 256 + 0, 0 * 256 * 256 + 0 * 256 + 0, 0 * 256 * 256 + 0 * 256 + 0, 236 * 256 * 256 + 238 * 256 + 236, 76 * 256 * 256 + 154 * 256 + 236, 120 * 256 * 256 + 124 * 256 + 236, 176 * 256 * 256 + 98 * 256 + 236, 228 * 256 * 256 + 84 * 256 + 236, 236 * 256 * 256 + 88 * 256 + 180, 236 * 256 * 256 + 106 * 256 + 100, 212 * 256 * 256 + 136 * 256 + 32, 160 * 256 * 256 + 170 * 256 + 0, 116 * 256 * 256 + 196 * 256 + 0, 76 * 256 * 256 + 208 * 256 + 32, 56 * 256 * 256 + 204 * 256 + 108, 56 * 256 * 256 + 180 * 256 + 204, 60 * 256 * 256 + 60 * 256 + 60, 0 * 256 * 256 + 0 * 256 + 0, 0 * 256 * 256 + 0 * 256 + 0, 236 * 256 * 256 + 238 * 256 + 236, 168 * 256 * 256 + 204 * 256 + 236, 188 * 256 * 256 + 188 * 256 + 236, 212 * 256 * 256 + 178 * 256 + 236, 236 * 256 * 256 + 174 * 256 + 236, 236 * 256 * 256 + 174 * 256 + 212, 236 * 256 * 256 + 180 * 256 + 176, 228 * 256 * 256 + 196 * 256 + 144, 204 * 256 * 256 + 210 * 256 + 120, 180 * 256 * 256 + 222 * 256 + 120, 168 * 256 * 256 + 226 * 256 + 144, 152 * 256 * 256 + 226 * 256 + 180, 160 * 256 * 256 + 214 * 256 + 228, 160 * 256 * 256 + 162 * 256 + 160, 0 * 256 * 256 + 0 * 256 + 0, 0 * 256 * 256 + 0 * 256 + 0},
 	}
 }
 
 func (ppu *Ppu) ReadRegister (register int) byte {
-	if register == 2 {
-		// PPUSTATUS TODO do this correctly
+	switch register {
+	case 2:
+		// PPUSTATUS
+		var status byte = ppu.ppuLatch & 0x1F
+		status |= ppu.flag_spriteOverflow << 5
+		status |= ppu.flag_sprite0Hit << 6
+		status |= ppu.flag_vBlank << 7
 
-		var status byte = 0
-		if ppu.status_vBlank {
-			status |= 1 << 7;
-		}
-		ppu.status_vBlank = false
+		ppu.flag_vBlank = 0
+		ppu.ppuLatch = status
+		ppu.addressLatchIndex = 0
 		return status
+	case 4:
+		// OAMDATA
+		return ppu.oam[ppu.oamAddr]
+		// XXX increment after read during rendering?
+	case 7:
+		// PPUDATA
+		data := ppu.mem.Read(address(ppu.addressLatch))
+		if ppu.flag_incrementVram == 0 {
+			ppu.addressLatch += 1
+		} else {
+			ppu.addressLatch += 32
+		}
+		return data
+	default:
+		return ppu.ppuLatch
 	}
-	return 0;
 }
 
 func (ppu *Ppu) WriteRegister (register int, data byte) {
-	if register == 0 {
-		// fmt.Printf("%X , %b\n", data, data)
+	ppu.ppuLatch = data
+	switch register {
+	case 0:
+		// PPUCTRL
+		if ppu.cycles > 29658 * 3 {
+			ppu.flag_baseNametable = data & 0x3
+			ppu.flag_incrementVram = data & 0x4 >> 2
+			ppu.flag_spriteTableAddress = data & 0x8 >> 3
+			ppu.flag_backgroundTableAddress = data & 0x10 >> 4
+			ppu.flag_spriteSize = data & 0x20 >> 5
+			ppu.flag_masterSlave = data & 0x40 >> 6
+			ppu.flag_generateNMIs = data & 0x80 >> 7
+		}
+	case 1:
+		// PPUMASK
+		ppu.flag_grayscale = data & 0x1 >> 0
+		ppu.flag_showBackgroundLeft = data & 0x2 >> 1
+		ppu.flag_showSpritesLeft = data & 0x4 >> 2
+		ppu.flag_renderBackground = data & 0x8 >> 3
+		ppu.flag_renderSprites = data & 0x10 >> 4
+		ppu.flag_emphasizeRed = data & 0x20 >> 5
+		ppu.flag_emphasizeGreen = data & 0x40 >> 6
+		ppu.flag_emphasizeBlue = data & 0x80 >> 7
+	case 3:
+		// OAMADDR
+		ppu.oamAddr = data
+	case 4:
+		// OAMDATA
+		if !ppu.status_rendering {
+			ppu.oam[ppu.oamAddr] = data
+			ppu.oamAddr++
+		}
+	case 5:
+		// PPUSCROLL
+		if ppu.addressLatchIndex == 0 {
+			ppu.scrollPositionX = data
+		} else {
+			ppu.scrollPositionY = data
+		}
+		ppu.addressLatchIndex = 1 - ppu.addressLatchIndex
+	case 6:
+		// PPUADDR
+		if ppu.addressLatchIndex == 0 {
+			ppu.addressLatch = (ppu.addressLatch & 0x0F) | (uint16(data) << 8)
+		} else {
+			ppu.addressLatch = (ppu.addressLatch & 0xF0) | (uint16(data))
+		}
+		ppu.addressLatchIndex = 1 - ppu.addressLatchIndex
+	case 7:
+		// PPUDATA
+		ppu.mem.Write(address(ppu.addressLatch), data)
+		if ppu.flag_incrementVram == 0 {
+			ppu.addressLatch += 1
+		} else {
+			ppu.addressLatch += 32
+		}
+	case 0x4014:
+		// OAMDMA
+		// TODO suspend CPU for 513-514 cycles
+		addr := address(data << 8)
+		for i := 0; i < 256; i++ {
+			ppu.oam[(ppu.oamAddr + byte(i)) & 0xFF] = nes.cpu.mem.Read(addr + address(i))
+		}
 	}
 }
 
 func (ppu *Ppu) Emulate(cycles int) {
-	// do nothing during warmup cycles
-	/* if ppu.warmupRemaining > 0 {
-		if cycles > ppu.warmupRemaining {
-			cycles -= ppu.warmupRemaining;
-			ppu.warmupRemaining = 0;
-		} else {
-			ppu.warmupRemaining -= cycles;
-			return;
-		}
-	}*/
-
 	cycles_left := cycles
 	for cycles_left > 0 {
+		ppu.cycles++
 		ppu.tickCounter++
 		if ppu.tickCounter >= 341 {
 			ppu.tickCounter = 0
@@ -70,18 +180,34 @@ func (ppu *Ppu) Emulate(cycles int) {
 
 		if ppu.scanlineCounter == -1 && ppu.tickCounter == 1 {
 			// prerender
-			ppu.status_sprite0Hit = false
-			ppu.status_vBlank = false
-			ppu.status_spriteOverflow = false
+			ppu.flag_sprite0Hit = 0
+			ppu.flag_vBlank = 0
+			ppu.flag_spriteOverflow = 1
+			ppu.status_rendering = true
+		}
+
+		if ppu.scanlineCounter >= 0  && ppu.scanlineCounter < 240 {
+			// drawing!
+			if ppu.tickCounter >= 4 && ppu.tickCounter < 4 + 256 {
+				ppu.funcPushPixel(ppu.tickCounter - 4, ppu.scanlineCounter, ppu.FetchColor(0))
+			}
 		}
 
 		if ppu.scanlineCounter == 241 && ppu.tickCounter == 1 {
 			// VBLANK
-			ppu.nes.cpu.pendingNmiInterrupt = true
-			ppu.status_vBlank = true
+			ppu.funcPushFrame()
+			if ppu.flag_generateNMIs == 1 {
+				ppu.nes.cpu.pendingNmiInterrupt = true
+			}
+			ppu.flag_vBlank = 1
 			ppu.frameCounter += 1
+			ppu.status_rendering = false
 		}
 
 		cycles_left--;
 	}
+}
+
+func (ppu *Ppu) FetchColor(index byte) color {
+	return ppu.colors[ppu.palette[index & 0x20]]
 }

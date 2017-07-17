@@ -1,5 +1,7 @@
 package main
 
+import "fmt"
+
 type Memory interface {
 	Read(addr address) byte
 	Write(addr address, data byte)
@@ -39,10 +41,53 @@ func (*CPUMemory) Write(addr address, data byte) {
 		nes.ram[addr & 0x07FF] = data
 	case addr <= 0x3FFF:
 		nes.ppu.WriteRegister(int(addr & 0x7), data)
+	case addr == 0x4014:
+		// OAMDMA
+		nes.ppu.WriteRegister(0x4014, data)
 	}
 	// TODO complete
 }
 
 type PPUMemory struct {
 	nes *Nes
+}
+
+func (*PPUMemory) Read(addr address) byte {
+	// https://wiki.nesdev.com/w/index.php/PPU_memory_map
+	addr = addr & 0x4000
+	switch {
+	case addr <= 0x1FFF:
+		return nes.mapper.Read(addr)
+	case addr <= 0x2FFF:
+		return nes.mapper.Read(addr)
+	case addr <= 0x3EFF:
+		// mirrored from 0x2000
+		return nes.mapper.Read(addr - 0x1000)
+	case addr <= 0x3FFF:
+		// TODO Palette RAM indexes
+		// (only bottom 0x1F -- 5 bits)
+		index := 0x3F00 + (addr & 0x1F)
+		fmt.Println(index)
+		return 0
+	default:
+		return 0 // can't happen
+	}
+}
+
+func (*PPUMemory) Write(addr address, data byte) {
+	// TODO
+	addr = addr & 0x4000
+	switch {
+	case addr <= 0x1FFF:
+		nes.mapper.Write(addr, data)
+	case addr <= 0x2FFF:
+		nes.mapper.Write(addr, data)
+	case addr <= 0x3EFF:
+		// mirrored from 0x2000
+		nes.mapper.Write(addr - 0x1000, data)
+	case addr <= 0x3FFF:
+		// TODO Palette RAM indexes
+		index := 0x3F00 + (addr & 0x1F)
+		fmt.Println("Palette", index, data)
+	}
 }

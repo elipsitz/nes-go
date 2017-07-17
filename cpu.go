@@ -5,8 +5,6 @@ import (
 	"time"
 )
 
-type address uint16
-
 type Cpu struct {
 	nes *Nes
 	mem Memory

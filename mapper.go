@@ -23,6 +23,10 @@ func (m *MapperMMC0) Read(addr address) byte {
 	switch {
 	case addr <= 0x1FFF:
 		return nes.cartridge.chr[addr]
+	case addr <= 0x2FFF:
+		// mirroring of nametables.
+		// TODO actually implement
+		return nes.ppu.vram[(addr - 0x2000) & 0x800]
 	case addr >= 0x8000 && addr <= 0xBFFF:
 		return nes.cartridge.prg[addr - 0x8000]
 	case addr >= 0xC000 && addr <= 0xFFFF:
