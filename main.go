@@ -57,9 +57,9 @@ func sdlLoop() {
 			switch t := event.(type) {
 			case *sdl.QuitEvent:
 				running = false
+				fmt.Println(t.Type)
 			case *sdl.MouseMotionEvent:
-				fmt.Printf("[%d ms] MouseMotion\ttype:%d\tid:%d\tx:%d\ty:%d\txrel:%d\tyrel:%d\n",
-					t.Timestamp, t.Type, t.Which, t.X, t.Y, t.XRel, t.YRel)
+				// fmt.Printf("[%d ms] MouseMotion\ttype:%d\tid:%d\tx:%d\ty:%d\txrel:%d\tyrel:%d\n", t.Timestamp, t.Type, t.Which, t.X, t.Y, t.XRel, t.YRel)
 			}
 		}
 

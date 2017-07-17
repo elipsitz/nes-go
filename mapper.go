@@ -26,7 +26,7 @@ func (m *MapperMMC0) Read(addr address) byte {
 	case addr <= 0x2FFF:
 		// mirroring of nametables.
 		// TODO actually implement
-		return nes.ppu.vram[(addr - 0x2000) & 0x800]
+		return nes.ppu.vram[(addr - 0x2000) & 0x7FF]
 	case addr >= 0x8000 && addr <= 0xBFFF:
 		return nes.cartridge.prg[addr - 0x8000]
 	case addr >= 0xC000 && addr <= 0xFFFF:
@@ -42,4 +42,13 @@ func (m *MapperMMC0) Read(addr address) byte {
 
 func (m *MapperMMC0) Write(addr address, data byte) {
 	// TODO
+	switch {
+	case addr <= 0x1FFF:
+		nes.cartridge.chr[addr] = data // Not really ROm though
+	case addr <= 0x2FFF:
+		// TODO actually implement nametable mirroring
+		nes.ppu.vram[(addr - 0x2000) & 0x7FF] = data
+	default:
+		panic(fmt.Sprintf("MMC write out of bounds: %.4X", addr))
+	}
 }

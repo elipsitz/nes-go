@@ -1,5 +1,9 @@
 package main
 
+import (
+	"fmt"
+)
+
 type Ppu struct {
 	nes *Nes
 	mem Memory
@@ -54,6 +58,7 @@ type Ppu struct {
 }
 
 func NewPpu(nes *Nes) *Ppu {
+	fmt.Println("...")
 	return &Ppu{
 		nes:             nes,
 		mem: &PPUMemory{nes: nes},
@@ -142,13 +147,15 @@ func (ppu *Ppu) WriteRegister (register int, data byte) {
 	case 6:
 		// PPUADDR
 		if ppu.addressLatchIndex == 0 {
-			ppu.addressLatch = (ppu.addressLatch & 0x0F) | (uint16(data) << 8)
+			ppu.addressLatch = (ppu.addressLatch & 0x00FF) | (uint16(data) << 8)
 		} else {
-			ppu.addressLatch = (ppu.addressLatch & 0xF0) | (uint16(data))
+			ppu.addressLatch = (ppu.addressLatch & 0xFF00) | (uint16(data))
 		}
+		// fmt.Println("write to address latch: ", ppu.addressLatchIndex, data, ppu.addressLatch)
 		ppu.addressLatchIndex = 1 - ppu.addressLatchIndex
 	case 7:
 		// PPUDATA
+		// fmt.Println("write to ppudata ", ppu.addressLatch, data)
 		ppu.mem.Write(address(ppu.addressLatch), data)
 		if ppu.flag_incrementVram == 0 {
 			ppu.addressLatch += 1
@@ -178,18 +185,45 @@ func (ppu *Ppu) Emulate(cycles int) {
 			}
 		}
 
-		if ppu.scanlineCounter == -1 && ppu.tickCounter == 1 {
-			// prerender
-			ppu.flag_sprite0Hit = 0
-			ppu.flag_vBlank = 0
-			ppu.flag_spriteOverflow = 1
-			ppu.status_rendering = true
+		if ppu.scanlineCounter == -1 {
+			if ppu.tickCounter == 0 {
+				if ppu.frameCounter % 2 == 1 {
+					ppu.tickCounter++
+				}
+			}
+			if ppu.tickCounter == 1 {
+				// prerender
+				ppu.flag_sprite0Hit = 0
+				ppu.flag_vBlank = 0
+				ppu.flag_spriteOverflow = 1
+				ppu.status_rendering = true
+			}
 		}
 
 		if ppu.scanlineCounter >= 0  && ppu.scanlineCounter < 240 {
 			// drawing!
-			if ppu.tickCounter >= 4 && ppu.tickCounter < 4 + 256 {
-				ppu.funcPushPixel(ppu.tickCounter - 4, ppu.scanlineCounter, ppu.FetchColor(0))
+			if ppu.tickCounter >= 0 && ppu.tickCounter < 256 {
+				tileX, tileY := ppu.tickCounter / 8, ppu.scanlineCounter / 8
+				nametableEntry := ppu.mem.Read(address(0x2000 + tileY * 32 + tileX))
+				attributeEntry := ppu.mem.Read(address(0x23C0 + (tileY / 4 * 8) + (tileX / 4)))
+
+				var patternTableAddressLo address = 0
+				patternTableAddressLo |= address(ppu.scanlineCounter) % 8
+				patternTableAddressLo |= address(nametableEntry) << 4
+				patternTableAddressLo |= address(ppu.flag_backgroundTableAddress) << 12
+				patternTableAddressHi := patternTableAddressLo | 0x8
+
+				//fmt.Printf("%.8b %.8b\n", ppu.mem.Read(patternTableAddressLo), ppu.mem.Read(patternTableAddressHi))
+				color := (ppu.mem.Read(patternTableAddressLo) >> byte(7 - (ppu.tickCounter % 8)) & 1) | ((ppu.mem.Read(patternTableAddressHi) >> byte(7 - (ppu.tickCounter % 8)) & 1) << 1)
+				// fmt.Println(color)
+
+				palette := (attributeEntry >> byte(((tileX % 4) / 2) * 2 + ((tileY % 4) / 2) * 4)) & 0x3
+
+				if color != 0 {
+					ppu.funcPushPixel(ppu.tickCounter, ppu.scanlineCounter, ppu.FetchColor(color + (4 * palette)))
+				} else {
+					ppu.funcPushPixel(ppu.tickCounter, ppu.scanlineCounter, ppu.FetchColor(0))
+				}
 			}
 		}
 
@@ -209,5 +243,5 @@ func (ppu *Ppu) Emulate(cycles int) {
 }
 
 func (ppu *Ppu) FetchColor(index byte) color {
-	return ppu.colors[ppu.palette[index & 0x20]]
+	return ppu.colors[ppu.palette[index & 0x1F]]
 }

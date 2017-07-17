@@ -1,7 +1,5 @@
 package main
 
-import "fmt"
-
 type Memory interface {
 	Read(addr address) byte
 	Write(addr address, data byte)
@@ -54,7 +52,7 @@ type PPUMemory struct {
 
 func (*PPUMemory) Read(addr address) byte {
 	// https://wiki.nesdev.com/w/index.php/PPU_memory_map
-	addr = addr & 0x4000
+	addr = addr & 0x3FFF
 	switch {
 	case addr <= 0x1FFF:
 		return nes.mapper.Read(addr)
@@ -64,11 +62,9 @@ func (*PPUMemory) Read(addr address) byte {
 		// mirrored from 0x2000
 		return nes.mapper.Read(addr - 0x1000)
 	case addr <= 0x3FFF:
-		// TODO Palette RAM indexes
 		// (only bottom 0x1F -- 5 bits)
-		index := 0x3F00 + (addr & 0x1F)
-		fmt.Println(index)
-		return 0
+		index := addr & 0x1F
+		return nes.ppu.palette[index]
 	default:
 		return 0 // can't happen
 	}
@@ -76,7 +72,7 @@ func (*PPUMemory) Read(addr address) byte {
 
 func (*PPUMemory) Write(addr address, data byte) {
 	// TODO
-	addr = addr & 0x4000
+	addr = addr & 0x3FFF
 	switch {
 	case addr <= 0x1FFF:
 		nes.mapper.Write(addr, data)
@@ -86,8 +82,7 @@ func (*PPUMemory) Write(addr address, data byte) {
 		// mirrored from 0x2000
 		nes.mapper.Write(addr - 0x1000, data)
 	case addr <= 0x3FFF:
-		// TODO Palette RAM indexes
-		index := 0x3F00 + (addr & 0x1F)
-		fmt.Println("Palette", index, data)
+		index := addr & 0x1F
+		nes.ppu.palette[index] = data
 	}
 }
