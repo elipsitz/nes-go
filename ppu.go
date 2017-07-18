@@ -273,14 +273,19 @@ func (ppu *Ppu) Emulate(cycles int) {
 					}
 					ppu.spriteXCounters[ppu.spriteEvaluationN], ppu.spriteAttributes[ppu.spriteEvaluationN] = int(xpos), attribute
 
+					// TODO support 8x16 sprites
 					// fetch bitmap data into shift registers
+					tileRow := ppu.scanlineCounter - int(ypos)
+					if attribute&0x80 > 0 {
+						// flip sprite vertically
+						tileRow = 7 - tileRow
+					}
 					var patternAddr address = 0
-					patternAddr |= address(ppu.scanlineCounter - int(ypos))
+					patternAddr |= address(tileRow)
 					patternAddr |= address(tile) << 4
 					patternAddr |= address(ppu.flag_spriteTableAddress) << 12
 					lo, hi := ppu.mem.Read(patternAddr), ppu.mem.Read(patternAddr+8)
 
-					// todo flip sprite vertically (if attribute & 0x80 > 0)
 					if attribute&0x40 > 0 {
 						// flip sprite horizontally
 						var hi2, lo2 byte

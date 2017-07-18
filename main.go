@@ -154,7 +154,7 @@ func sdlCleanup() {
 func main() {
 	fmt.Println("aeNES")
 
-	nes = NewNes("roms/Donkey Kong.nes")
+	nes = NewNes("roms/Pinball.nes")
 	nes.ppu.funcPushFrame = pushFrame
 	nes.ppu.funcPushPixel = pushPixel
 

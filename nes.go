@@ -1,5 +1,7 @@
 package main
 
+import "fmt"
+
 type address uint16
 type color uint32
 
@@ -18,6 +20,8 @@ func NewNes(romPath string) *Nes {
 	nes := Nes{
 		cartridge: LoadCartridge(romPath),
 	}
+	a, b, c := nes.cartridge.CRC32()
+	fmt.Printf("CRC32: %.8X, %.8X, %.8X", a, b, c)
 	nes.cpu = NewCpu(&nes)
 	nes.ppu = NewPpu(&nes)
 	nes.mapper = NewMapper(&nes)
