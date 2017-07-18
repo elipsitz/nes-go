@@ -35,6 +35,7 @@ func logline(line string) {
 
 var surface *sdl.Surface
 var window *sdl.Window
+var debugSurface *sdl.Surface
 var debugRenderer *sdl.Renderer
 
 var nes *Nes
@@ -49,7 +50,10 @@ func sdlInit() {
 	surface, err = window.GetSurface()
 	check(err)
 
-	debugRenderer, err = sdl.CreateSoftwareRenderer(surface)
+	debugSurface, err = sdl.CreateRGBSurface(0, 256, 240, 32, 0xff000000, 0x00ff0000, 0x0000ff00, 0x000000ff)
+	check(err)
+
+	debugRenderer, err = sdl.CreateSoftwareRenderer(debugSurface)
 	check(err)
 }
 
@@ -95,8 +99,11 @@ func pushFrame() {
 			x, y := nes.ppu.oam[i+3], nes.ppu.oam[i+0]
 			debugRenderer.DrawRect(&sdl.Rect{int32(x), int32(y), 8, 8})
 		}
+		debugSurface.Blit(nil, surface, nil)
 	}
+
 	window.UpdateSurface()
+	debugSurface.FillRect(nil, 0x00000000)
 }
 
 func sdlCleanup() {
