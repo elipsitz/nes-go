@@ -8,6 +8,8 @@ type Nes struct {
 	ppu       *Ppu
 	cartridge *Cartridge
 	mapper    Mapper
+	controller1 *Controller
+	controller2 *Controller
 
 	ram [2048]byte
 }
@@ -19,6 +21,8 @@ func NewNes(romPath string) *Nes {
 	nes.cpu = NewCpu(&nes)
 	nes.ppu = NewPpu(&nes)
 	nes.mapper = NewMapper(&nes)
+	nes.controller1 = NewController()
+	nes.controller2 = NewController()
 
 	return &nes
 }

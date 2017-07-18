@@ -67,9 +67,44 @@ func sdlLoop() {
 				running = false
 			case *sdl.MouseMotionEvent:
 				// fmt.Printf("[%d ms] MouseMotion\ttype:%d\tid:%d\tx:%d\ty:%d\txrel:%d\tyrel:%d\n", t.Timestamp, t.Type, t.Which, t.X, t.Y, t.XRel, t.YRel)
+			case *sdl.KeyDownEvent:
+				switch t.Keysym.Scancode {
+				case sdl.SCANCODE_RETURN:
+					nes.controller1.buttons[ButtonStart] = true
+				case sdl.SCANCODE_LSHIFT:
+					nes.controller1.buttons[ButtonSelect] = true
+				case sdl.SCANCODE_LEFT:
+					nes.controller1.buttons[ButtonLeft] = true
+				case sdl.SCANCODE_RIGHT:
+					nes.controller1.buttons[ButtonRight] = true
+				case sdl.SCANCODE_UP:
+					nes.controller1.buttons[ButtonUp] = true
+				case sdl.SCANCODE_DOWN:
+					nes.controller1.buttons[ButtonDown] = true
+				case sdl.SCANCODE_Z:
+					nes.controller1.buttons[ButtonA] = true
+				case sdl.SCANCODE_X:
+					nes.controller1.buttons[ButtonB] = true
+				}
 			case *sdl.KeyUpEvent:
-				if t.Keysym.Sym == 96 {
-					// TILDE, toggle debug
+				switch t.Keysym.Scancode {
+				case sdl.SCANCODE_RETURN:
+					nes.controller1.buttons[ButtonStart] = false
+				case sdl.SCANCODE_LSHIFT:
+					nes.controller1.buttons[ButtonSelect] = false
+				case sdl.SCANCODE_LEFT:
+					nes.controller1.buttons[ButtonLeft] = false
+				case sdl.SCANCODE_RIGHT:
+					nes.controller1.buttons[ButtonRight] = false
+				case sdl.SCANCODE_UP:
+					nes.controller1.buttons[ButtonUp] = false
+				case sdl.SCANCODE_DOWN:
+					nes.controller1.buttons[ButtonDown] = false
+				case sdl.SCANCODE_Z:
+					nes.controller1.buttons[ButtonA] = false
+				case sdl.SCANCODE_X:
+					nes.controller1.buttons[ButtonB] = false
+				case sdl.SCANCODE_GRAVE:
 					debug = !debug
 				}
 			}
@@ -81,8 +116,10 @@ func sdlLoop() {
 		frameTime := timeEnd.Sub(timeStart)
 		// desired frame time = 16.66ms = 16666667 nanoseconds
 		// fmt.Printf("Frame in: %dms\n", frameTime.Nanoseconds() / 1000000)
-		delay := uint32((16666667 - frameTime.Nanoseconds()) / 1000000)
-		sdl.Delay(delay)
+		delay := (16666667 - frameTime.Nanoseconds()) / 1000000
+		if delay > 0 {
+			sdl.Delay(uint32(delay))
+		}
 	}
 }
 
