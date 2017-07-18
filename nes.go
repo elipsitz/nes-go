@@ -22,3 +22,19 @@ func NewNes(romPath string) *Nes {
 
 	return &nes
 }
+
+func (nes *Nes) Emulate() int {
+	clocks := nes.cpu.Emulate(1)
+	nes.ppu.Emulate(clocks * 3)
+
+	return clocks
+}
+
+func (nes *Nes) EmulateFrame() int {
+	cycles := 0
+	startFrame := nes.ppu.frameCounter
+	for startFrame == nes.ppu.frameCounter {
+		cycles += nes.Emulate()
+	}
+	return cycles
+}

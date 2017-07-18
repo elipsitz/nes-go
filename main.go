@@ -58,8 +58,6 @@ func sdlInit() {
 }
 
 func sdlLoop() {
-	nesLoop()
-
 	var event sdl.Event
 	running := true
 	for running {
@@ -67,7 +65,6 @@ func sdlLoop() {
 			switch t := event.(type) {
 			case *sdl.QuitEvent:
 				running = false
-				fmt.Println(t.Type)
 			case *sdl.MouseMotionEvent:
 				// fmt.Printf("[%d ms] MouseMotion\ttype:%d\tid:%d\tx:%d\ty:%d\txrel:%d\tyrel:%d\n", t.Timestamp, t.Type, t.Which, t.X, t.Y, t.XRel, t.YRel)
 			case *sdl.KeyUpEvent:
@@ -78,8 +75,14 @@ func sdlLoop() {
 			}
 		}
 
-		nesLoop()
-		sdl.Delay(16)
+		timeStart := time.Now()
+		nes.EmulateFrame()
+		timeEnd := time.Now()
+		frameTime := timeEnd.Sub(timeStart)
+		// desired frame time = 16.66ms = 16666667 nanoseconds
+		// fmt.Printf("Frame in: %dms\n", frameTime.Nanoseconds() / 1000000)
+		delay := uint32((16666667 - frameTime.Nanoseconds()) / 1000000)
+		sdl.Delay(delay)
 	}
 }
 
@@ -109,15 +112,6 @@ func pushFrame() {
 func sdlCleanup() {
 	window.Destroy()
 	sdl.Quit()
-}
-
-func nesLoop() {
-	// NES clock rate
-	clock := 1789773
-	for i := 0; i < clock/60; i++ {
-		nes.cpu.Emulate(1)
-		nes.ppu.Emulate(3)
-	}
 }
 
 func main() {
