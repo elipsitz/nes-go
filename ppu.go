@@ -37,6 +37,7 @@ type Ppu struct {
 	spriteEvaluationN    int
 	spriteEvaluationM    int
 	spriteEvaluationRead byte
+	pendingNumScanlineSprites int
 	numScanlineSprites   int
 	spriteXCounters      [8]int
 	spriteAttributes     [8]byte
@@ -225,17 +226,17 @@ func (ppu *Ppu) Emulate(cycles int) {
 			if ppu.tickCounter == 65 {
 				ppu.spriteEvaluationN = 0
 				ppu.spriteEvaluationM = 0
-				ppu.numScanlineSprites = 0
+				ppu.pendingNumScanlineSprites = 0
 			}
 			if ppu.tickCounter >= 65 && ppu.tickCounter <= 256 {
 				// Sprite Evaluation Stage 2: Loading the Secondary OAM
-				if ppu.spriteEvaluationN < 64 && ppu.numScanlineSprites < 8 {
+				if ppu.spriteEvaluationN < 64 && ppu.pendingNumScanlineSprites < 8 {
 					if ppu.tickCounter%2 == 1 {
 						// read from primary
 						ppu.spriteEvaluationRead = ppu.oam[4*ppu.spriteEvaluationN+ppu.spriteEvaluationM]
 					} else {
 						// write to secondary
-						ppu.secondary_oam[4*ppu.numScanlineSprites+ppu.spriteEvaluationM] = ppu.spriteEvaluationRead
+						ppu.secondary_oam[4*ppu.pendingNumScanlineSprites+ppu.spriteEvaluationM] = ppu.spriteEvaluationRead
 						if ppu.spriteEvaluationM == 0 {
 							// check to see if it's in range
 							if byte(ppu.scanlineCounter) >= ppu.spriteEvaluationRead && byte(ppu.scanlineCounter) < ppu.spriteEvaluationRead+8 {
@@ -249,7 +250,7 @@ func (ppu *Ppu) Emulate(cycles int) {
 						if ppu.spriteEvaluationM == 3 {
 							ppu.spriteEvaluationN++
 							ppu.spriteEvaluationM = 0
-							ppu.numScanlineSprites += 1
+							ppu.pendingNumScanlineSprites += 1
 						} else {
 							ppu.spriteEvaluationM++
 						}
@@ -258,6 +259,7 @@ func (ppu *Ppu) Emulate(cycles int) {
 			}
 			if ppu.tickCounter >= 257 && ppu.tickCounter <= 320 {
 				ppu.spriteEvaluationN = (ppu.tickCounter - 257) / 8
+				ppu.numScanlineSprites = ppu.pendingNumScanlineSprites
 				if (ppu.tickCounter-257)%8 == 0 {
 					// fetch x position, attribute into temporary latches and counters
 					var ypos, tile, attribute, xpos byte
@@ -298,7 +300,7 @@ func (ppu *Ppu) Emulate(cycles int) {
 			}
 
 			// drawing!
-			if ppu.tickCounter >= 0 && ppu.tickCounter < 256 {
+			if ppu.tickCounter >= 1 && ppu.tickCounter <= 256 {
 				tileX, tileY := ppu.tickCounter/8, ppu.scanlineCounter/8
 				nametableEntry := ppu.mem.Read(address(0x2000 + tileY*32 + tileX))
 				attributeEntry := ppu.mem.Read(address(0x23C0 + (tileY / 4 * 8) + (tileX / 4)))
@@ -319,9 +321,10 @@ func (ppu *Ppu) Emulate(cycles int) {
 
 				// TODO sprite 0 hit
 				// check on sprites
+
 				var spritePaletteEntry byte = 0
 				for n := ppu.numScanlineSprites - 1; n >= 0; n-- {
-					if ppu.spriteXCounters[n] > -8 {
+					if ppu.spriteXCounters[n] > -7 {
 						ppu.spriteXCounters[n]--
 						if ppu.spriteXCounters[n] <= 0 {
 							// draw this sprite
@@ -340,7 +343,7 @@ func (ppu *Ppu) Emulate(cycles int) {
 					// TODO actual priority calculation
 					paletteEntry = spritePaletteEntry
 				}
-				ppu.funcPushPixel(ppu.tickCounter, ppu.scanlineCounter, ppu.FetchColor(paletteEntry))
+				ppu.funcPushPixel(ppu.tickCounter - 1, ppu.scanlineCounter, ppu.FetchColor(paletteEntry))
 			}
 		}
 
