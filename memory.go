@@ -61,8 +61,6 @@ func (*PPUMemory) Read(addr address) byte {
 	// https://wiki.nesdev.com/w/index.php/PPU_memory_map
 	addr = addr & 0x3FFF
 	switch {
-	case addr <= 0x1FFF:
-		return nes.mapper.Read(addr)
 	case addr <= 0x2FFF:
 		return nes.mapper.Read(addr)
 	case addr <= 0x3EFF:
@@ -72,17 +70,13 @@ func (*PPUMemory) Read(addr address) byte {
 		// (only bottom 0x1F -- 5 bits)
 		index := addr & 0x1F
 		return nes.ppu.palette[index]
-	default:
-		return 0 // can't happen
 	}
+	return 0 // can't be reached
 }
 
 func (*PPUMemory) Write(addr address, data byte) {
-	// TODO
 	addr = addr & 0x3FFF
 	switch {
-	case addr <= 0x1FFF:
-		nes.mapper.Write(addr, data)
 	case addr <= 0x2FFF:
 		nes.mapper.Write(addr, data)
 	case addr <= 0x3EFF:

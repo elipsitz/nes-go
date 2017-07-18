@@ -6,14 +6,14 @@ type address uint16
 type color uint32
 
 type Nes struct {
-	cpu       *Cpu
-	ppu       *Ppu
-	cartridge *Cartridge
-	mapper    Mapper
+	cpu         *Cpu
+	ppu         *Ppu
+	cartridge   *Cartridge
+	mapper      Mapper
 	controller1 *Controller
 	controller2 *Controller
 
-	ram [2048]byte
+	ram [4096]byte // only 2048 bytes are included in the console normally
 }
 
 func NewNes(romPath string) *Nes {

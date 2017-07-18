@@ -1,40 +1,68 @@
 package main
 
 import (
-	"os"
-	"io"
+	"encoding/binary"
 	"hash/crc32"
+	"io"
+	"os"
 )
 
+type INesHeader struct {
+	MagicNumber uint32
+	SizeRomPRG  byte
+	SizeRomCHR  byte
+	Flag6       byte
+	Flag7       byte
+	SizeRamPRG  byte
+	ExtraFlags  [7]byte
+}
+
 type Cartridge struct {
-	header   []byte
-	prg      []byte
-	chr      []byte
-	mapperID int
+	header     INesHeader
+	prg        []byte
+	chr        []byte
+	mapperID   int
+	mirrorMode int
 }
 
 func LoadCartridge(path string) *Cartridge {
 	f, err := os.Open(path)
 	check(err)
-	r := f
+	defer f.Close()
 
-	cartridge := Cartridge{}
-
-	cartridge.header = make([]byte, 16)
-	_, err = io.ReadFull(r, cartridge.header)
+	c := Cartridge{}
+	c.header = INesHeader{}
+	err = binary.Read(f, binary.LittleEndian, &c.header)
 	check(err)
 
-	var prgSize, chrSize int = int(cartridge.header[4])*16384, int(cartridge.header[5])*8192;
-	cartridge.prg, cartridge.chr = make([]byte, prgSize), make([]byte, chrSize)
-	_, err = io.ReadFull(r, cartridge.prg)
-	check(err)
-	_, err = io.ReadFull(r, cartridge.chr)
-	check(err)
-	f.Close()
+	if c.header.MagicNumber != 0x1a53454e {
+		panic("Invalid iNES file")
+	}
 
-	cartridge.mapperID = int((cartridge.header[7] & 0xF0) | (cartridge.header[6] >> 4))
+	c.mapperID = int((c.header.Flag7 & 0xF0) | (c.header.Flag6 >> 4))
+	c.mirrorMode = int((c.header.Flag6 & 0x1) | (c.header.Flag6 & 0x8 >> 2))
 
-	return &cartridge
+	// read and discard trainer
+	if c.header.Flag6&0x4 > 0 {
+		_, err = io.ReadFull(f, make([]byte, 512))
+		check(err)
+	}
+
+	// read PRG rom
+	c.prg = make([]byte, int(c.header.SizeRomPRG)*16384)
+	_, err = io.ReadFull(f, c.prg)
+	check(err)
+
+	// read CHR rom (0 means 8192 bytes of battery backed RAM?)
+	sizeCHR := int(c.header.SizeRomCHR)
+	if sizeCHR == 0 {
+		sizeCHR = 1
+	}
+	c.chr = make([]byte, sizeCHR*8192)
+	_, err = io.ReadFull(f, c.chr)
+	check(err)
+
+	return &c
 }
 
 func (cartridge *Cartridge) CRC32() (prg, chr, total uint32) {

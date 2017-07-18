@@ -1,10 +1,10 @@
 package main
 
 import (
-	"fmt"
 	"bufio"
-	"time"
+	"fmt"
 	"github.com/veandco/go-sdl2/sdl"
+	"time"
 )
 
 func check(e error) {
@@ -154,7 +154,7 @@ func sdlCleanup() {
 func main() {
 	fmt.Println("aeNES")
 
-	nes = NewNes("roms/Pinball.nes")
+	nes = NewNes("roms/nestest.nes")
 	nes.ppu.funcPushFrame = pushFrame
 	nes.ppu.funcPushPixel = pushPixel
 
