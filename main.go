@@ -35,8 +35,10 @@ func logline(line string) {
 
 var surface *sdl.Surface
 var window *sdl.Window
+var debugRenderer *sdl.Renderer
 
 var nes *Nes
+var debug bool
 
 func sdlInit() {
 	var err error
@@ -45,6 +47,9 @@ func sdlInit() {
 	check(err)
 
 	surface, err = window.GetSurface()
+	check(err)
+
+	debugRenderer, err = sdl.CreateSoftwareRenderer(surface)
 	check(err)
 }
 
@@ -61,6 +66,11 @@ func sdlLoop() {
 				fmt.Println(t.Type)
 			case *sdl.MouseMotionEvent:
 				// fmt.Printf("[%d ms] MouseMotion\ttype:%d\tid:%d\tx:%d\ty:%d\txrel:%d\tyrel:%d\n", t.Timestamp, t.Type, t.Which, t.X, t.Y, t.XRel, t.YRel)
+			case *sdl.KeyUpEvent:
+				if t.Keysym.Sym == 96 {
+					// TILDE, toggle debug
+					debug = !debug
+				}
 			}
 		}
 
@@ -75,9 +85,17 @@ func pushPixel(x int, y int, col color) {
 	pixels[4*(y*int(surface.W)+x)+1] = byte(col >> 8)
 	pixels[4*(y*int(surface.W)+x)+2] = byte(col >> 16)
 	pixels[4*(y*int(surface.W)+x)+3] = byte(col >> 24)
+
 }
 
 func pushFrame() {
+	if debug {
+		debugRenderer.SetDrawColor(0, 255, 0, 255)
+		for i := 0; i < 256; i += 4 {
+			x, y := nes.ppu.oam[i+3], nes.ppu.oam[i+0]
+			debugRenderer.DrawRect(&sdl.Rect{int32(x), int32(y), 8, 8})
+		}
+	}
 	window.UpdateSurface()
 }
 
