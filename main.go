@@ -42,7 +42,8 @@ var debugSurface *sdl.Surface
 var debugRenderer *sdl.Renderer
 
 var nes *Nes
-var debug bool
+var debug int
+var debugNumScreens int = 2
 
 func sdlInit() {
 	var err error
@@ -108,7 +109,7 @@ func sdlLoop() {
 				case sdl.SCANCODE_X:
 					nes.controller1.buttons[ButtonB] = false
 				case sdl.SCANCODE_GRAVE:
-					debug = !debug
+					debug = (debug + 1) % (debugNumScreens + 1)
 				}
 			}
 		}
@@ -136,12 +137,35 @@ func pushPixel(x int, y int, col color) {
 }
 
 func pushFrame() {
-	if debug {
-		debugRenderer.SetDrawColor(0, 255, 0, 255)
-		for i := 0; i < 256; i += 4 {
-			x, y := nes.ppu.oam[i+3], nes.ppu.oam[i+0]
-			debugRenderer.DrawRect(&sdl.Rect{int32(x), int32(y), 8, 8})
+	if debug > 0 {
+		if debug == 1 {
+			debugRenderer.SetDrawColor(0, 255, 0, 255)
+			for i := 0; i < 256; i += 4 {
+				x, y := nes.ppu.oam[i+3], nes.ppu.oam[i+0]
+				debugRenderer.DrawRect(&sdl.Rect{int32(x), int32(y), 8, 8})
+			}
 		}
+
+		if debug == 2 {
+			// draw pattern tables
+			for x := 0; x < 256; x++ {
+				for y := 0; y < 128; y++ {
+					addr := 0
+					addr |= y % 8
+					addr |= (x % 128 / 8) << 4
+					addr |= (y % 128 / 8) << 8
+					if x >= 128 {
+						addr |= 0x1000
+					}
+					lo, hi := nes.ppu.mem.Read(address(addr)), nes.ppu.mem.Read(address(addr+8))
+					col := (((lo << uint(x%8)) & 0x80) >> 7) | (((hi << uint(x%8)) & 0x80) >> 6)
+					col += 1
+					debugRenderer.SetDrawColor(col*60, col*60, col*60, 255)
+					debugRenderer.DrawPoint(x, y)
+				}
+			}
+		}
+
 		debugSurface.Blit(nil, surface, nil)
 	}
 

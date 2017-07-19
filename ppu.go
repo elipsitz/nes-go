@@ -164,12 +164,11 @@ func (ppu *Ppu) WriteRegister(register int, data byte) {
 		}
 	case 6:
 		// PPUADDR
-		fmt.Println(ppu.w, data)
 		if ppu.w == 0 {
 			ppu.t = (ppu.t & 0x80FF) | ((uint16(data) & 0x3F) << 8)
 			ppu.w = 1
 		} else {
-			ppu.t = (ppu.t & 0xF0) | uint16(data)
+			ppu.t = (ppu.t & 0xFF00) | uint16(data)
 			ppu.v = ppu.t
 			ppu.w = 0
 		}
@@ -228,7 +227,7 @@ func (ppu *Ppu) Emulate(cycles int) {
 		}
 
 		// fetching tile data
-		if ppu.scanlineCounter < 240 && (ppu.tickCounter <= 256 || ppu.tickCounter >= 321) && (ppu.tickCounter%1 == 0) {
+		if ppu.scanlineCounter < 240 && (ppu.tickCounter <= 256 || ppu.tickCounter >= 321) && (ppu.tickCounter%8 == 1) {
 			ppu.fetchTileData()
 		}
 
@@ -398,9 +397,9 @@ func (ppu *Ppu) fetchTileData() {
 	attributeData = ((attributeData >> (((ppu.v >> 4) & 4) | (ppu.v & 2))) & 3) << 2
 
 	var patternAddr address = 0
-	patternAddr |= address((ppu.v >> 12) & 0x3)
+	patternAddr |= address((ppu.v >> 12) & 0x7)
 	patternAddr |= address(nametableData) << 4
-	patternAddr |= address(ppu.flag_spriteTableAddress) << 12
+	patternAddr |= address(ppu.flag_backgroundTableAddress) << 12
 	patternLo, patternHi := ppu.mem.Read(patternAddr), ppu.mem.Read(patternAddr+8)
 
 	var bitmap uint32 = 0
