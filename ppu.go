@@ -159,7 +159,7 @@ func (ppu *Ppu) WriteRegister(register int, data byte) {
 			ppu.x = data & 0x7
 			ppu.w = 1
 		} else {
-			ppu.t = (ppu.t & 0x8C1F) | ((uint16(data) & 0xF8) << 5) | ((uint16(data) & 0x7) << 12)
+			ppu.t = (ppu.t & 0x8C1F) | ((uint16(data) & 0xF8) << 2) | ((uint16(data) & 0x7) << 12)
 			ppu.w = 0
 		}
 	case 6:
@@ -391,8 +391,6 @@ func (ppu *Ppu) Emulate(cycles int) {
 }
 
 func (ppu *Ppu) fetchTileData() {
-	debugRenderer.SetDrawColor(uint8((ppu.v&0x1F)<<3), 255, 255, 255)
-	debugRenderer.DrawPoint(ppu.tickCounter-1, ppu.scanlineCounter)
 	// run on (_ % 8 == 1) ticks in prerender and render scanlines
 	// we need to fetch a tile AND the attribute data, combine them, and
 	// shove them onto our queue of uh, stuff

@@ -180,7 +180,7 @@ func sdlCleanup() {
 
 func main() {
 	fmt.Println("aeNES")
-	romPath := "roms/Donkey Kong.nes"
+	romPath := "roms/Legend of Zelda, The.nes"
 	fmt.Println("loading", romPath)
 
 	referenceLogFile, err := os.Open(romPath + ".debug")
