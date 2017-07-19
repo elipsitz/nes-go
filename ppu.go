@@ -192,7 +192,7 @@ func (ppu *Ppu) Emulate(cycles int) {
 	for cycles_left > 0 {
 		ppu.cycles++
 		ppu.tickCounter++
-		if ppu.tickCounter >= 341 {
+		if ppu.tickCounter == 341 || (ppu.tickCounter == 340 && ppu.scanlineCounter == -1 && ppu.frameCounter%2 == 1) {
 			ppu.tickCounter = 0
 			ppu.scanlineCounter++;
 			if ppu.scanlineCounter > 260 {
@@ -306,6 +306,7 @@ func (ppu *Ppu) Emulate(cycles int) {
 
 			// drawing!
 			if ppu.tickCounter >= 1 && ppu.tickCounter <= 256 {
+				// TODO actual scrolling
 				tileX, tileY := ppu.tickCounter/8, ppu.scanlineCounter/8
 				nametableEntry := ppu.mem.Read(address(0x2000 + tileY*32 + tileX))
 				attributeEntry := ppu.mem.Read(address(0x23C0 + (tileY / 4 * 8) + (tileX / 4)))

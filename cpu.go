@@ -187,7 +187,7 @@ func (cpu *Cpu) Emulate(cycles int) int {
 		}
 		opcode := cpu.mem.Read(cpu.PC)
 
-		// logline(fmt.Sprintf("%.4X  %.2X________________________________________A:%.2X X:%.2X Y:%.2X P:%.2X SP:%.2X CYC:___", cpu.PC, opcode, cpu.A, cpu.X, cpu.Y, cpu.statusPack() & 0xEF, cpu.SP))
+		logline(fmt.Sprintf("%.4X  %.2X________________________________________A:%.2X X:%.2X Y:%.2X P:%.2X SP:%.2X CYC:___", cpu.PC, opcode, cpu.A, cpu.X, cpu.Y, cpu.statusPack()&0xEF, cpu.SP))
 
 		if opcode&0x3 == 1 {
 			var size, cycles int

@@ -26,13 +26,12 @@ func (*CPUMemory) Read(addr address) byte {
 		return nes.controller2.Read()
 	case addr <= 0x4017:
 		// TODO NES APU and I/O REGISTERS
-		return 0
 	case addr <= 0x401F:
 		// CPU test mode
-		return 0
-	default:
+	case addr >= 0x4020:
 		return nes.mapper.Read(addr)
 	}
+	return 0
 }
 
 func (*CPUMemory) Write(addr address, data byte) {
@@ -49,7 +48,7 @@ func (*CPUMemory) Write(addr address, data byte) {
 	case addr == 0x4016:
 		nes.controller1.Write(data)
 		nes.controller2.Write(data)
-	default:
+	case addr >= 0x4020:
 		nes.mapper.Write(addr, data)
 	}
 	// TODO complete
@@ -86,6 +85,9 @@ func (*PPUMemory) Write(addr address, data byte) {
 		nes.mapper.Write(addr-0x1000, data)
 	case addr <= 0x3FFF:
 		index := addr & 0x1F
+		if index == 0x10 || index == 0x14 || index == 0x18 || index == 0x1C {
+			index -= 0x10
+		}
 		nes.ppu.palette[index] = data
 	}
 }

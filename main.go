@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/veandco/go-sdl2/sdl"
 	"time"
+	"os"
 )
 
 func check(e error) {
@@ -16,20 +17,22 @@ func check(e error) {
 var referenceLog *bufio.Scanner
 
 func logline(line string) {
-	fmt.Println(line)
+	// fmt.Println(line)
 	return
-	if referenceLog.Scan() {
-		reference := referenceLog.Text()
-		for i := 0; i < len(reference); i++ {
-			if line[i] != reference[i] && line[i] != '_' {
-				fmt.Println(reference)
-				fmt.Println(line)
-				time.Sleep(10000000)
-				panic("FAIL")
-				return
+	if referenceLog != nil {
+		if referenceLog.Scan() {
+			reference := referenceLog.Text()
+			for i := 0; i < len(line); i++ {
+				if line[i] != reference[i] && line[i] != '_' {
+					fmt.Println(reference)
+					fmt.Println(line)
+					time.Sleep(10000000)
+					panic("FAIL")
+					return
+				}
 			}
+			fmt.Println(reference)
 		}
-		fmt.Println(reference)
 	}
 }
 
@@ -71,7 +74,7 @@ func sdlLoop() {
 				switch t.Keysym.Scancode {
 				case sdl.SCANCODE_RETURN:
 					nes.controller1.buttons[ButtonStart] = true
-				case sdl.SCANCODE_LSHIFT:
+				case sdl.SCANCODE_RSHIFT:
 					nes.controller1.buttons[ButtonSelect] = true
 				case sdl.SCANCODE_LEFT:
 					nes.controller1.buttons[ButtonLeft] = true
@@ -90,7 +93,7 @@ func sdlLoop() {
 				switch t.Keysym.Scancode {
 				case sdl.SCANCODE_RETURN:
 					nes.controller1.buttons[ButtonStart] = false
-				case sdl.SCANCODE_LSHIFT:
+				case sdl.SCANCODE_RSHIFT:
 					nes.controller1.buttons[ButtonSelect] = false
 				case sdl.SCANCODE_LEFT:
 					nes.controller1.buttons[ButtonLeft] = false
@@ -153,8 +156,16 @@ func sdlCleanup() {
 
 func main() {
 	fmt.Println("aeNES")
+	romPath := "roms/Metroid.nes"
+	fmt.Println("loading", romPath)
 
-	nes = NewNes("roms/Dr. Mario.nes")
+	referenceLogFile, err := os.Open(romPath + ".debug")
+	if err == nil {
+		fmt.Println("found debug log")
+		referenceLog = bufio.NewScanner(referenceLogFile)
+	}
+
+	nes = NewNes(romPath)
 	nes.ppu.funcPushFrame = pushFrame
 	nes.ppu.funcPushPixel = pushPixel
 

@@ -16,6 +16,13 @@ type MapperMMC1 struct {
 	prgRam [8192]byte
 }
 
+func NewMapperMMC1(nes *Nes) *MapperMMC1 {
+	return &MapperMMC1{
+		nes:             nes,
+		registerControl: 0x0f,
+	}
+}
+
 func (m *MapperMMC1) Read(addr address) byte {
 	switch {
 	case addr <= 0x0FFF:

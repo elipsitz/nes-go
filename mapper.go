@@ -10,9 +10,9 @@ type Mapper interface {
 func NewMapper(nes *Nes) Mapper {
 	switch nes.cartridge.mapperID {
 	case 0:
-		return &MapperMMC0{nes: nes}
+		return NewMapperMMC0(nes)
 	case 1:
-		return &MapperMMC1{nes: nes}
+		return NewMapperMMC1(nes)
 	default:
 		panic(fmt.Sprintf("Unknown mapper: %d", nes.cartridge.mapperID))
 	}

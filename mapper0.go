@@ -1,9 +1,13 @@
 package main
 
-import "fmt"
-
 type MapperMMC0 struct {
 	nes *Nes
+}
+
+func NewMapperMMC0(nes *Nes) *MapperMMC0 {
+	return &MapperMMC0{
+		nes: nes,
+	}
 }
 
 func (m *MapperMMC0) Read(addr address) byte {
@@ -21,8 +25,9 @@ func (m *MapperMMC0) Read(addr address) byte {
 			return m.nes.cartridge.prg[addr-0xC000]
 		}
 	default:
-		panic(fmt.Sprintf("MMC read out of bounds: %.4X", addr))
+		//panic(fmt.Sprintf("MMC read out of bounds: %.4X", addr))
 	}
+	return 0
 }
 
 func (m *MapperMMC0) Write(addr address, data byte) {
@@ -32,6 +37,6 @@ func (m *MapperMMC0) Write(addr address, data byte) {
 	case addr <= 0x2FFF:
 		m.nes.ppu.vram[TranslateVRamAddress(addr, m.nes.cartridge.mirrorMode)] = data
 	default:
-		panic(fmt.Sprintf("MMC write out of bounds: %.4X", addr))
+		// panic(fmt.Sprintf("MMC write out of bounds: %.4X", addr))
 	}
 }
