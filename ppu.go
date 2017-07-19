@@ -174,7 +174,6 @@ func (ppu *Ppu) WriteRegister(register int, data byte) {
 		}
 	case 7:
 		// PPUDATA
-		// fmt.Println("write to ppudata ", ppu.addressLatch, data)
 		ppu.mem.Write(address(ppu.v), data)
 		if ppu.flag_incrementVram == 0 {
 			ppu.v += 1
@@ -206,6 +205,8 @@ func (ppu *Ppu) Emulate(cycles int) {
 			}
 		}
 
+		renderingEnabled := ppu.flag_renderBackground != 0 || ppu.flag_renderSprites != 0
+
 		if ppu.scanlineCounter == -1 {
 			if ppu.tickCounter == 0 {
 				if ppu.frameCounter%2 == 1 {
@@ -219,20 +220,15 @@ func (ppu *Ppu) Emulate(cycles int) {
 				ppu.flag_spriteOverflow = 1
 				ppu.status_rendering = true
 			}
-			if ppu.tickCounter == 304 {
+			if ppu.tickCounter == 304 && renderingEnabled {
 				// copy vertical scroll bits
 				// v: IHGF.ED CBA..... = t: IHGF.ED CBA.....
 				ppu.v = (ppu.v & 0x841F) | (ppu.t & 0x7BE0)
 			}
 		}
 
-		// fetching tile data
-		if ppu.scanlineCounter < 240 && (ppu.tickCounter <= 256 || ppu.tickCounter >= 321) && (ppu.tickCounter%8 == 1) {
-			ppu.fetchTileData()
-		}
-
 		// visible rendered scanlines
-		if ppu.scanlineCounter >= 0 && ppu.scanlineCounter < 240 {
+		if ppu.scanlineCounter >= 0 && ppu.scanlineCounter < 240 && renderingEnabled {
 			/* ***** SPRITE EVALUATION ***** */
 			if ppu.tickCounter >= 1 && ppu.tickCounter <= 64 {
 				// https://wiki.nesdev.com/w/index.php/PPU_sprite_evaluation
@@ -323,19 +319,6 @@ func (ppu *Ppu) Emulate(cycles int) {
 			}
 			/* ***** END SPRITE EVALUATION ***** */
 
-			/* ***** UPDATE SCROLLING ********** */
-			if ppu.tickCounter == 256 {
-				ppu.incrementScrollY()
-			}
-			if ppu.tickCounter == 257 {
-				// copy horizontal bits from t to v
-				// v: ....F.. ...EDCBA = t: ....F.. ...EDCBA
-				ppu.v = (ppu.v & 0xFBE0) | (ppu.t & 0x41F)
-			}
-			if (ppu.tickCounter >= 328 || ppu.tickCounter <= 256) && (ppu.tickCounter%8 == 0) {
-				ppu.incrementScrollX()
-			}
-
 			/* ***** DRAWING ! ***************** */
 			if ppu.tickCounter >= 1 && ppu.tickCounter <= 256 {
 				// TODO background and sprite hiding
@@ -368,6 +351,28 @@ func (ppu *Ppu) Emulate(cycles int) {
 				}
 				ppu.funcPushPixel(ppu.tickCounter-1, ppu.scanlineCounter, ppu.FetchColor(pixelData))
 			}
+
+			// fetching tile data
+			if ppu.scanlineCounter < 240 {
+				if (ppu.tickCounter >= 1 && ppu.tickCounter <= 256) || (ppu.tickCounter >= 321 && ppu.tickCounter <= 336) {
+					if ppu.tickCounter%8 == 0 {
+						ppu.fetchTileData()
+					}
+				}
+			}
+
+			/* ***** UPDATE SCROLLING ********** */
+			if ppu.tickCounter == 256 {
+				ppu.incrementScrollY()
+			}
+			if ppu.tickCounter == 257 {
+				// copy horizontal bits from t to v
+				// v: ....F.. ...EDCBA = t: ....F.. ...EDCBA
+				ppu.v = (ppu.v & 0xFBE0) | (ppu.t & 0x41F)
+			}
+			if ((ppu.tickCounter >= 321 && ppu.tickCounter <= 336) || (ppu.tickCounter >= 1 && ppu.tickCounter <= 256)) && (ppu.tickCounter%8 == 0) {
+				ppu.incrementScrollX()
+			}
 		}
 
 		if ppu.scanlineCounter == 241 && ppu.tickCounter == 1 {
@@ -386,6 +391,8 @@ func (ppu *Ppu) Emulate(cycles int) {
 }
 
 func (ppu *Ppu) fetchTileData() {
+	debugRenderer.SetDrawColor(uint8((ppu.v&0x1F)<<3), 255, 255, 255)
+	debugRenderer.DrawPoint(ppu.tickCounter-1, ppu.scanlineCounter)
 	// run on (_ % 8 == 1) ticks in prerender and render scanlines
 	// we need to fetch a tile AND the attribute data, combine them, and
 	// shove them onto our queue of uh, stuff
