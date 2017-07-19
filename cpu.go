@@ -243,14 +243,17 @@ func (cpu *Cpu) Emulate(cycles int) int {
 				cpu.A ^= cpu.mem.Read(addr)
 			case 3:
 				// ADC - Add with Carry
-				var op1, op2 byte = cpu.A, cpu.mem.Read(addr)
-				var val uint16 = uint16(op1) + uint16(op2)
+				a := cpu.A
+				b := cpu.mem.Read(addr)
+				c := byte(0)
 				if cpu.status_C {
-					val += 1
+					c = 1
 				}
-				cpu.status_C = val > 255
-				cpu.A = byte(val)
-				cpu.status_V = ((op1&0x80 > 0) && (op2&0x80 > 0) && (cpu.A&0x80 == 0)) || ((op1&0x80 == 0) && (op2&0x80 == 0) && (cpu.A&0x80 > 0))
+
+				cpu.A = a + b + c
+				cpu.status_C = int(a)+int(b)+int(c) > 0xFF
+				cpu.status_V = (a^b)&0x80 == 0 && (a^cpu.A)&0x80 != 0
+				//cpu.status_V = ((op1&0x80 > 0) && (op2&0x80 > 0) && (cpu.A&0x80 == 0)) || ((op1&0x80 == 0) && (op2&0x80 == 0) && (cpu.A&0x80 > 0))
 			case 4:
 				// STA - Store Accumulator
 				cpu.mem.Write(addr, cpu.A)
@@ -265,16 +268,17 @@ func (cpu *Cpu) Emulate(cycles int) int {
 				cpu.status_N = (cpu.A-data)&0x80 > 0
 			case 7:
 				// SBC - Subtract With Carry
-				var sub int8 = int8(cpu.mem.Read(addr))
-				if !cpu.status_C {
-					sub++
+				a := cpu.A
+				b := cpu.mem.Read(addr)
+				c := byte(0)
+				if cpu.status_C {
+					c = 1
 				}
-				var op1, op2 byte = cpu.A, byte(-sub)
-				var val uint16 = uint16(op1) + uint16(op2)
 
-				cpu.status_C = val > 255
-				cpu.A = byte(val)
-				cpu.status_V = ((op1&0x80 > 0) && (op2&0x80 > 0) && (cpu.A&0x80 == 0)) || ((op1&0x80 == 0) && (op2&0x80 == 0) && (cpu.A&0x80 > 0))
+				cpu.A = a - b - (1 - c)
+				cpu.status_C = int(a)-int(b)-int(1-c) >= 0
+				cpu.status_V = (a^b)&0x80 != 0 && (a^cpu.A)&0x80 != 0
+				//cpu.status_V = ((op1&0x80 > 0) && (op2&0x80 > 0) && (cpu.A&0x80 == 0)) || ((op1&0x80 == 0) && (op2&0x80 == 0) && (cpu.A&0x80 > 0))
 			}
 
 			if instructionType != 4 && instructionType != 6 {

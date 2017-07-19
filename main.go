@@ -180,7 +180,7 @@ func sdlCleanup() {
 
 func main() {
 	fmt.Println("aeNES")
-	romPath := "roms/Super Mario Bros.nes"
+	romPath := "roms/test/test_cpu_official_only.nes"
 	fmt.Println("loading", romPath)
 
 	referenceLogFile, err := os.Open(romPath + ".debug")
