@@ -49,6 +49,8 @@ func (*CPUMemory) Write(addr address, data byte) {
 	case addr == 0x4016:
 		nes.controller1.Write(data)
 		nes.controller2.Write(data)
+	default:
+		nes.mapper.Write(addr, data)
 	}
 	// TODO complete
 }

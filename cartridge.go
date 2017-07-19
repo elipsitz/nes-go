@@ -53,14 +53,15 @@ func LoadCartridge(path string) *Cartridge {
 	_, err = io.ReadFull(f, c.prg)
 	check(err)
 
-	// read CHR rom (0 means 8192 bytes of battery backed RAM?)
-	sizeCHR := int(c.header.SizeRomCHR)
-	if sizeCHR == 0 {
-		sizeCHR = 1
-	}
-	c.chr = make([]byte, sizeCHR*8192)
+	// read CHR rom
+	c.chr = make([]byte, int(c.header.SizeRomCHR)*8192)
 	_, err = io.ReadFull(f, c.chr)
 	check(err)
+
+	if c.header.SizeRomCHR == 0 {
+		//  (0 means 8192 bytes of battery backed RAM?)
+		c.chr = make([]byte, 8192)
+	}
 
 	return &c
 }
