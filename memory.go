@@ -1,7 +1,5 @@
 package main
 
-import "fmt"
-
 type Memory interface {
 	Read(addr address) byte
 	Write(addr address, data byte)
@@ -38,9 +36,6 @@ func (*CPUMemory) Read(addr address) byte {
 
 func (*CPUMemory) Write(addr address, data byte) {
 	// fmt.Println("mem write", addr, data)
-	if addr >= 0x6000 && addr <= 0x7000 {
-		fmt.Printf("%.4X : %c    %d\n", addr, data, data)
-	}
 
 	switch {
 	case addr <= 0x1FFF:

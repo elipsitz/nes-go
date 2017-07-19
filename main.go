@@ -14,25 +14,38 @@ func check(e error) {
 	}
 }
 
+var referenceLogLine string
 var referenceLog *bufio.Scanner
+var referenceLogBegan bool
 
 func logline(line string) {
-	// fmt.Println(line)
+	//fmt.Println(line)
 	return
 	if referenceLog != nil {
-		if referenceLog.Scan() {
-			reference := referenceLog.Text()
-			for i := 0; i < len(line); i++ {
-				if line[i] != reference[i] && line[i] != '_' {
-					fmt.Println(reference)
-					fmt.Println(line)
-					time.Sleep(10000000)
-					panic("FAIL")
+		if len(referenceLogLine) == 0 {
+			referenceLog.Scan()
+			referenceLogLine = referenceLog.Text()
+		}
+		// fmt.Println(referenceLogLine)
+		// fmt.Println(line)
+		for i := 0; i < len(line); i++ {
+			if line[i] != referenceLogLine[i] && line[i] != '_' {
+				if !referenceLogBegan {
 					return
 				}
+				fmt.Println(referenceLogLine)
+				fmt.Println(line)
+				time.Sleep(10000000)
+				panic("FAIL")
+				return
 			}
-			fmt.Println(reference)
 		}
+		if !referenceLogBegan {
+			fmt.Println("reference log begins")
+			referenceLogBegan = true
+		}
+		fmt.Println(referenceLogLine)
+		referenceLogLine = ""
 	}
 }
 

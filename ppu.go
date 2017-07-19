@@ -358,7 +358,7 @@ func (ppu *Ppu) Emulate(cycles int) {
 			// VBLANK
 			ppu.funcPushFrame()
 			if ppu.flag_generateNMIs == 1 {
-				ppu.nes.cpu.pendingNmiInterrupt = true
+				ppu.nes.cpu.triggerInterruptNMI()
 			}
 			ppu.flag_vBlank = 1
 			ppu.frameCounter += 1

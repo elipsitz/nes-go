@@ -19,11 +19,10 @@ type Cpu struct {
 	status_Z bool // "Zero"
 	status_I bool // Interrupt enable/disable
 	status_D bool // BCD enable/disable
-	status_B bool // BRK software interrupt
 	status_V bool // Overflow
 	status_N bool // negative
 
-	pendingNmiInterrupt bool
+	pendingInterrupt int
 }
 
 func NewCpu(nes *Nes) *Cpu {
@@ -35,9 +34,12 @@ func NewCpu(nes *Nes) *Cpu {
 		Y:        0,
 		SP:       0xFD,
 		status_I: true,
-		status_B: true,
 	}
 }
+
+const interruptNone = 0
+const interruptNMI = 1
+const interruptIRQ = 2
 
 // interrupt vectors
 func (cpu *Cpu) getVectorReset() address {
@@ -127,7 +129,7 @@ func (cpu *Cpu) stackPull() byte {
 	return cpu.mem.Read(address(0x0100 + uint16(cpu.SP)))
 }
 
-func (cpu *Cpu) statusPack() (data byte) {
+func (cpu *Cpu) statusPack(status_B bool) (data byte) {
 	if cpu.status_C {
 		data |= 1 << 0
 	}
@@ -140,8 +142,7 @@ func (cpu *Cpu) statusPack() (data byte) {
 	if cpu.status_D {
 		data |= 1 << 3
 	}
-	if cpu.status_B {
-		// XXX note discussion of 'B' flag here: https://wiki.nesdev.com/w/index.php/Status_flags
+	if status_B {
 		data |= 1 << 4
 	}
 	data |= 1 << 5
@@ -159,7 +160,6 @@ func (cpu *Cpu) statusUnpack(data byte) {
 	cpu.status_Z = data&(1<<1) > 0
 	cpu.status_I = data&(1<<2) > 0
 	cpu.status_D = data&(1<<3) > 0
-	cpu.status_B = data&(1<<4) > 0 // XXX see above
 	cpu.status_V = data&(1<<6) > 0
 	cpu.status_N = data&(1<<7) > 0
 }
@@ -173,21 +173,42 @@ func (cpu *Cpu) read_uint16_buggy(addr address) uint16 {
 func (cpu *Cpu) handleInterrupt(addr address) {
 	cpu.stackPush(byte((cpu.PC >> 8) & 0xFF))
 	cpu.stackPush(byte(cpu.PC & 0xFF))
-	cpu.stackPush(cpu.statusPack())
+	cpu.stackPush(cpu.statusPack(false))
+	cpu.status_I = true
 	cpu.PC = addr
+}
+
+func (cpu *Cpu) triggerInterruptNMI() {
+	cpu.pendingInterrupt = interruptNMI
+}
+
+func (cpu *Cpu) triggerInterruptIRQ() {
+	if !cpu.status_I {
+		cpu.pendingInterrupt = interruptIRQ
+	}
 }
 
 // emulate for at least `cycles` cycles -- returns number of cycles actually emulated for
 func (cpu *Cpu) Emulate(cycles int) int {
 	cycles_left := cycles
 	for cycles_left > 0 {
-		if cpu.pendingNmiInterrupt {
-			cpu.pendingNmiInterrupt = false
+		switch cpu.pendingInterrupt {
+		case interruptNMI:
 			cpu.handleInterrupt(cpu.getVectorNMI())
+		case interruptIRQ:
+			cpu.handleInterrupt(cpu.getVectorBRK())
 		}
+		cpu.pendingInterrupt = interruptNone
+
 		opcode := cpu.mem.Read(cpu.PC)
 
-		logline(fmt.Sprintf("%.4X  %.2X________________________________________A:%.2X X:%.2X Y:%.2X P:%.2X SP:%.2X CYC:___", cpu.PC, opcode, cpu.A, cpu.X, cpu.Y, cpu.statusPack()&0xEF, cpu.SP))
+		logline(fmt.Sprintf("%.4X  %.2X________________________________________A:%.2X X:%.2X Y:%.2X P:%.2X SP:%.2X CYC:__________", cpu.PC, opcode, cpu.A, cpu.X, cpu.Y, cpu.statusPack(false), cpu.SP))
+
+		if cpu.PC == 0xEC5B {
+			// this is where the blarggg test rom fails
+			//time.Sleep(10000000)
+			//panic("fail")
+		}
 
 		if opcode&0x3 == 1 {
 			var size, cycles int
@@ -295,11 +316,11 @@ func (cpu *Cpu) Emulate(cycles int) int {
 		switch opcode {
 		case 0x00:
 			// BRK - Force Interrupt
-			returnAddr := cpu.PC + 1
+			returnAddr := cpu.PC + 2
 			cpu.stackPush(byte((returnAddr >> 8) & 0xFF))
 			cpu.stackPush(byte(returnAddr & 0xFF))
-			cpu.stackPush(cpu.statusPack())
-			cpu.status_B = true
+			cpu.stackPush(cpu.statusPack(true))
+			cpu.status_I = true // disable interrupts
 			cycles_left -= 7
 			cpu.PC = cpu.getVectorBRK()
 		case 0x20:
@@ -321,7 +342,7 @@ func (cpu *Cpu) Emulate(cycles int) int {
 			cycles_left -= 6
 		case 0x08:
 			// PHP - Push Processor Status
-			cpu.stackPush(cpu.statusPack())
+			cpu.stackPush(cpu.statusPack(true))
 			cpu.PC += 1
 			cycles_left -= 3
 		case 0x28:
