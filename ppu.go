@@ -34,15 +34,15 @@ type Ppu struct {
 	addressLatchIndex byte
 
 	// sprite rendering
-	spriteEvaluationN    int
-	spriteEvaluationM    int
-	spriteEvaluationRead byte
+	spriteEvaluationN         int
+	spriteEvaluationM         int
+	spriteEvaluationRead      byte
 	pendingNumScanlineSprites int
-	numScanlineSprites   int
-	spriteXCounters      [8]int
-	spriteAttributes     [8]byte
-	spriteBitmapDataLo   [8]byte
-	spriteBitmapDataHi   [8]byte
+	numScanlineSprites        int
+	spriteXCounters           [8]int
+	spriteAttributes          [8]byte
+	spriteBitmapDataLo        [8]byte
+	spriteBitmapDataHi        [8]byte
 
 	// PPUCTRL
 	flag_baseNametable          byte
@@ -194,9 +194,9 @@ func (ppu *Ppu) Emulate(cycles int) {
 		ppu.tickCounter++
 		if ppu.tickCounter == 341 || (ppu.tickCounter == 340 && ppu.scanlineCounter == -1 && ppu.frameCounter%2 == 1) {
 			ppu.tickCounter = 0
-			ppu.scanlineCounter++;
+			ppu.scanlineCounter++
 			if ppu.scanlineCounter > 260 {
-				ppu.scanlineCounter = -1;
+				ppu.scanlineCounter = -1
 			}
 		}
 
@@ -349,7 +349,7 @@ func (ppu *Ppu) Emulate(cycles int) {
 					// TODO actual priority calculation
 					paletteEntry = spritePaletteEntry
 				}
-				ppu.funcPushPixel(ppu.tickCounter - 1, ppu.scanlineCounter, ppu.FetchColor(paletteEntry))
+				ppu.funcPushPixel(ppu.tickCounter-1, ppu.scanlineCounter, ppu.FetchColor(paletteEntry))
 			}
 		}
 
@@ -364,7 +364,7 @@ func (ppu *Ppu) Emulate(cycles int) {
 			ppu.status_rendering = false
 		}
 
-		cycles_left--;
+		cycles_left--
 	}
 }
 

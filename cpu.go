@@ -122,7 +122,7 @@ func (cpu *Cpu) stackPush(data byte) {
 	cpu.SP--
 }
 
-func (cpu *Cpu) stackPull() (byte) {
+func (cpu *Cpu) stackPull() byte {
 	cpu.SP++
 	return cpu.mem.Read(address(0x0100 + uint16(cpu.SP)))
 }

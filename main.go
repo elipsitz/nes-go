@@ -4,8 +4,8 @@ import (
 	"bufio"
 	"fmt"
 	"github.com/veandco/go-sdl2/sdl"
-	"time"
 	"os"
+	"time"
 )
 
 func check(e error) {
