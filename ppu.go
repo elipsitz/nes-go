@@ -43,10 +43,12 @@ type Ppu struct {
 	spriteEvaluationRead      byte
 	pendingNumScanlineSprites int
 	numScanlineSprites        int
-	spriteXCounters           [8]int
+	spriteXPositions          [8]int
 	spriteAttributes          [8]byte
 	spriteBitmapDataLo        [8]byte
 	spriteBitmapDataHi        [8]byte
+	spriteZeroAt              int
+	spriteZeroAtNext          int
 
 	// PPUCTRL
 	flag_baseNametable          byte
@@ -241,6 +243,7 @@ func (ppu *Ppu) Emulate(cycles int) {
 				ppu.spriteEvaluationN = 0
 				ppu.spriteEvaluationM = 0
 				ppu.pendingNumScanlineSprites = 0
+				ppu.spriteZeroAtNext = 0
 			}
 			if ppu.tickCounter >= 65 && ppu.tickCounter <= 256 {
 				// Sprite Evaluation Stage 2: Loading the Secondary OAM
@@ -262,6 +265,9 @@ func (ppu *Ppu) Emulate(cycles int) {
 							}
 						}
 						if ppu.spriteEvaluationM == 3 {
+							if ppu.spriteEvaluationN == 0 {
+								ppu.spriteZeroAt = ppu.pendingNumScanlineSprites
+							}
 							ppu.spriteEvaluationN++
 							ppu.spriteEvaluationM = 0
 							ppu.pendingNumScanlineSprites += 1
@@ -274,6 +280,7 @@ func (ppu *Ppu) Emulate(cycles int) {
 			if ppu.tickCounter >= 257 && ppu.tickCounter <= 320 {
 				ppu.spriteEvaluationN = (ppu.tickCounter - 257) / 8
 				ppu.numScanlineSprites = ppu.pendingNumScanlineSprites
+				ppu.spriteZeroAt = ppu.spriteZeroAtNext
 				if (ppu.tickCounter-257)%8 == 0 {
 					// fetch x position, attribute into temporary latches and counters
 					var ypos, tile, attribute, xpos byte
@@ -285,7 +292,7 @@ func (ppu *Ppu) Emulate(cycles int) {
 					} else {
 						ypos, tile, attribute, xpos = 0xFF, 0xFF, 0xFF, 0xFF
 					}
-					ppu.spriteXCounters[ppu.spriteEvaluationN], ppu.spriteAttributes[ppu.spriteEvaluationN] = int(xpos), attribute
+					ppu.spriteXPositions[ppu.spriteEvaluationN], ppu.spriteAttributes[ppu.spriteEvaluationN] = int(xpos), attribute
 
 					// TODO support 8x16 sprites
 					// fetch bitmap data into shift registers
@@ -321,35 +328,7 @@ func (ppu *Ppu) Emulate(cycles int) {
 
 			/* ***** DRAWING ! ***************** */
 			if ppu.tickCounter >= 1 && ppu.tickCounter <= 256 {
-				// TODO background and sprite hiding
-				pixelData := byte(ppu.backgroundBitmapData >> (32 + ((7 - ppu.x) * 4)) & 0xF)
-				ppu.backgroundBitmapData <<= 4
-
-				// TODO sprite 0 hit
-				// check on sprites
-
-				var spriteData byte = 0
-				for n := ppu.numScanlineSprites - 1; n >= 0; n-- {
-					if ppu.spriteXCounters[n] > -7 {
-						ppu.spriteXCounters[n]--
-						if ppu.spriteXCounters[n] <= 0 {
-							// draw this sprite
-							attributes := ppu.spriteAttributes[n]
-							data := ((ppu.spriteBitmapDataHi[n] & 0x80) >> 6) | ((ppu.spriteBitmapDataLo[n] & 0x80) >> 7)
-							ppu.spriteBitmapDataHi[n] <<= 1
-							ppu.spriteBitmapDataLo[n] <<= 1
-							if data != 0 {
-								spriteData = 0x10 + data + 4*(attributes&0x3)
-							}
-						}
-					}
-				}
-
-				if spriteData != 0 {
-					// TODO actual priority calculation
-					pixelData = spriteData
-				}
-				ppu.funcPushPixel(ppu.tickCounter-1, ppu.scanlineCounter, ppu.FetchColor(pixelData))
+				ppu.renderPixel()
 			}
 
 			// fetching tile data
@@ -388,6 +367,65 @@ func (ppu *Ppu) Emulate(cycles int) {
 
 		cycles_left--
 	}
+}
+
+func (ppu *Ppu) renderPixel() {
+	x, y := ppu.tickCounter-1, ppu.scanlineCounter
+
+	// background pixel
+	backgroundPixel := byte(ppu.backgroundBitmapData >> (32 + ((7 - ppu.x) * 4)) & 0xF)
+	ppu.backgroundBitmapData <<= 4
+
+	// sprite pixel
+	var spritePixel byte = 0
+	var spriteIndex = 0
+	for n := 0; n < ppu.numScanlineSprites; n++ {
+		offset := (ppu.tickCounter - 1) - int(ppu.spriteXPositions[n])
+		if offset >= 0 && offset < 8 {
+			attributes := ppu.spriteAttributes[n]
+			data := ((ppu.spriteBitmapDataHi[n] & 0x80) >> 6) | ((ppu.spriteBitmapDataLo[n] & 0x80) >> 7)
+			ppu.spriteBitmapDataHi[n] <<= 1
+			ppu.spriteBitmapDataLo[n] <<= 1
+			if data != 0 {
+				spritePixel = 0x10 + data + 4*(attributes&0x3)
+				spriteIndex = n
+				break
+			}
+		}
+	}
+
+	// left screen hiding
+	if x < 8 {
+		if ppu.flag_showBackgroundLeft == 0 {
+			backgroundPixel = 0
+		}
+		if ppu.flag_showSpritesLeft == 0 {
+			spritePixel = 0
+		}
+	}
+
+	var output byte = 0
+	bgVisible, spVisible := backgroundPixel%4 != 0, spritePixel%4 != 0
+	if !bgVisible && !spVisible {
+		output = 0
+	} else if !bgVisible {
+		output = spritePixel
+	} else if !spVisible {
+		output = backgroundPixel
+	} else {
+		if spriteIndex == ppu.spriteZeroAt {
+			ppu.flag_sprite0Hit = 1
+		}
+
+		spriteHasPriority := ppu.spriteAttributes[spriteIndex]&0x20 == 0
+		if spriteHasPriority {
+			output = spritePixel
+		} else {
+			output = backgroundPixel
+		}
+	}
+
+	ppu.funcPushPixel(x, y, ppu.FetchColor(output))
 }
 
 func (ppu *Ppu) fetchTileData() {

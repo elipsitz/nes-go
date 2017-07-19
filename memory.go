@@ -36,6 +36,9 @@ func (*CPUMemory) Read(addr address) byte {
 
 func (*CPUMemory) Write(addr address, data byte) {
 	// fmt.Println("mem write", addr, data)
+	/*if addr >= 0x6000 && addr <= 7000 {
+		fmt.Printf("%.4X : %c", addr, data)
+	}*/
 
 	switch {
 	case addr <= 0x1FFF:
@@ -51,7 +54,7 @@ func (*CPUMemory) Write(addr address, data byte) {
 	case addr >= 0x4020:
 		nes.mapper.Write(addr, data)
 	}
-	// TODO complete
+	// TODO do the APU and I/O
 }
 
 type PPUMemory struct {
