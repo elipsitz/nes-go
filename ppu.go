@@ -29,9 +29,13 @@ type Ppu struct {
 	flag_sprite0Hit     byte
 	flag_spriteOverflow byte
 
-	ppuLatch          byte
-	addressLatch      uint16
-	addressLatchIndex byte
+	// scrolling / internal registers
+	ppuLatch             byte
+	v                    uint16
+	t                    uint16
+	x                    byte
+	w                    byte
+	backgroundBitmapData uint64
 
 	// sprite rendering
 	spriteEvaluationN         int
@@ -63,9 +67,6 @@ type Ppu struct {
 	flag_emphasizeGreen     byte
 	flag_emphasizeBlue      byte
 
-	scrollPositionX byte
-	scrollPositionY byte
-
 	oamAddr byte
 }
 
@@ -95,7 +96,7 @@ func (ppu *Ppu) ReadRegister(register int) byte {
 
 		ppu.flag_vBlank = 0
 		ppu.ppuLatch = status
-		ppu.addressLatchIndex = 0
+		ppu.w = 0
 		return status
 	case 4:
 		// OAMDATA
@@ -104,11 +105,11 @@ func (ppu *Ppu) ReadRegister(register int) byte {
 		// XXX increment after read during rendering?
 	case 7:
 		// PPUDATA
-		data := ppu.mem.Read(address(ppu.addressLatch))
+		data := ppu.mem.Read(address(ppu.v))
 		if ppu.flag_incrementVram == 0 {
-			ppu.addressLatch += 1
+			ppu.v += 1
 		} else {
-			ppu.addressLatch += 32
+			ppu.v += 32
 		}
 		return data
 	default:
@@ -129,6 +130,7 @@ func (ppu *Ppu) WriteRegister(register int, data byte) {
 			ppu.flag_spriteSize = data & 0x20 >> 5
 			ppu.flag_masterSlave = data & 0x40 >> 6
 			ppu.flag_generateNMIs = data & 0x80 >> 7
+			ppu.t = (ppu.t & 0xF3FF) | ((uint16(data) & 0x03) << 10)
 		}
 	case 1:
 		// PPUMASK
@@ -151,29 +153,34 @@ func (ppu *Ppu) WriteRegister(register int, data byte) {
 		}
 	case 5:
 		// PPUSCROLL
-		if ppu.addressLatchIndex == 0 {
-			ppu.scrollPositionX = data
+		// https://wiki.nesdev.com/w/index.php/PPU_scrolling#Register_controls
+		if ppu.w == 0 {
+			ppu.t = (ppu.t & 0xFFE0) | (uint16(data) >> 3)
+			ppu.x = data & 0x7
+			ppu.w = 1
 		} else {
-			ppu.scrollPositionY = data
+			ppu.t = (ppu.t & 0x8C1F) | ((uint16(data) & 0xF8) << 5) | ((uint16(data) & 0x7) << 12)
+			ppu.w = 0
 		}
-		ppu.addressLatchIndex = 1 - ppu.addressLatchIndex
 	case 6:
 		// PPUADDR
-		if ppu.addressLatchIndex == 0 {
-			ppu.addressLatch = (ppu.addressLatch & 0x00FF) | (uint16(data) << 8)
+		fmt.Println(ppu.w, data)
+		if ppu.w == 0 {
+			ppu.t = (ppu.t & 0x80FF) | ((uint16(data) & 0x3F) << 8)
+			ppu.w = 1
 		} else {
-			ppu.addressLatch = (ppu.addressLatch & 0xFF00) | (uint16(data))
+			ppu.t = (ppu.t & 0xF0) | uint16(data)
+			ppu.v = ppu.t
+			ppu.w = 0
 		}
-		// fmt.Println("write to address latch: ", ppu.addressLatchIndex, data, ppu.addressLatch)
-		ppu.addressLatchIndex = 1 - ppu.addressLatchIndex
 	case 7:
 		// PPUDATA
 		// fmt.Println("write to ppudata ", ppu.addressLatch, data)
-		ppu.mem.Write(address(ppu.addressLatch), data)
+		ppu.mem.Write(address(ppu.v), data)
 		if ppu.flag_incrementVram == 0 {
-			ppu.addressLatch += 1
+			ppu.v += 1
 		} else {
-			ppu.addressLatch += 32
+			ppu.v += 32
 		}
 	case 0x4014:
 		// OAMDMA
@@ -213,9 +220,21 @@ func (ppu *Ppu) Emulate(cycles int) {
 				ppu.flag_spriteOverflow = 1
 				ppu.status_rendering = true
 			}
+			if ppu.tickCounter == 304 {
+				// copy vertical scroll bits
+				// v: IHGF.ED CBA..... = t: IHGF.ED CBA.....
+				ppu.v = (ppu.v & 0x841F) | (ppu.t & 0x7BE0)
+			}
 		}
 
+		// fetching tile data
+		if ppu.scanlineCounter < 240 && (ppu.tickCounter <= 256 || ppu.tickCounter >= 321) && (ppu.tickCounter%1 == 0) {
+			ppu.fetchTileData()
+		}
+
+		// visible rendered scanlines
 		if ppu.scanlineCounter >= 0 && ppu.scanlineCounter < 240 {
+			/* ***** SPRITE EVALUATION ***** */
 			if ppu.tickCounter >= 1 && ppu.tickCounter <= 64 {
 				// https://wiki.nesdev.com/w/index.php/PPU_sprite_evaluation
 				// Sprite Evaluation Stage 1: Clearing the Secondary OAM
@@ -303,32 +322,31 @@ func (ppu *Ppu) Emulate(cycles int) {
 					// TODO just load transparent sprite if there are fewer than 8
 				}
 			}
+			/* ***** END SPRITE EVALUATION ***** */
 
-			// drawing!
+			/* ***** UPDATE SCROLLING ********** */
+			if ppu.tickCounter == 256 {
+				ppu.incrementScrollY()
+			}
+			if ppu.tickCounter == 257 {
+				// copy horizontal bits from t to v
+				// v: ....F.. ...EDCBA = t: ....F.. ...EDCBA
+				ppu.v = (ppu.v & 0xFBE0) | (ppu.t & 0x41F)
+			}
+			if (ppu.tickCounter >= 328 || ppu.tickCounter <= 256) && (ppu.tickCounter%8 == 0) {
+				ppu.incrementScrollX()
+			}
+
+			/* ***** DRAWING ! ***************** */
 			if ppu.tickCounter >= 1 && ppu.tickCounter <= 256 {
-				// TODO actual scrolling
-				tileX, tileY := ppu.tickCounter/8, ppu.scanlineCounter/8
-				nametableEntry := ppu.mem.Read(address(0x2000 + tileY*32 + tileX))
-				attributeEntry := ppu.mem.Read(address(0x23C0 + (tileY / 4 * 8) + (tileX / 4)))
-
-				var patternTableAddressLo address = 0
-				patternTableAddressLo |= address(ppu.scanlineCounter) % 8
-				patternTableAddressLo |= address(nametableEntry) << 4
-				patternTableAddressLo |= address(ppu.flag_backgroundTableAddress) << 12
-				patternTableAddressHi := patternTableAddressLo | 0x8
-
-				color := (ppu.mem.Read(patternTableAddressLo) >> byte(7-(ppu.tickCounter%8)) & 1) | ((ppu.mem.Read(patternTableAddressHi) >> byte(7-(ppu.tickCounter%8)) & 1) << 1)
-
-				palette := (attributeEntry >> byte(((tileX%4)/2)*2+((tileY%4)/2)*4)) & 0x3
-				paletteEntry := color + (4 * palette)
-				if color == 0 {
-					paletteEntry = 0
-				}
+				// TODO background and sprite hiding
+				pixelData := byte(ppu.backgroundBitmapData >> (32 + ((7 - ppu.x) * 4)) & 0xF)
+				ppu.backgroundBitmapData <<= 4
 
 				// TODO sprite 0 hit
 				// check on sprites
 
-				var spritePaletteEntry byte = 0
+				var spriteData byte = 0
 				for n := ppu.numScanlineSprites - 1; n >= 0; n-- {
 					if ppu.spriteXCounters[n] > -7 {
 						ppu.spriteXCounters[n]--
@@ -339,17 +357,17 @@ func (ppu *Ppu) Emulate(cycles int) {
 							ppu.spriteBitmapDataHi[n] <<= 1
 							ppu.spriteBitmapDataLo[n] <<= 1
 							if data != 0 {
-								spritePaletteEntry = 0x10 + data + 4*(attributes&0x3)
+								spriteData = 0x10 + data + 4*(attributes&0x3)
 							}
 						}
 					}
 				}
 
-				if spritePaletteEntry != 0 {
+				if spriteData != 0 {
 					// TODO actual priority calculation
-					paletteEntry = spritePaletteEntry
+					pixelData = spriteData
 				}
-				ppu.funcPushPixel(ppu.tickCounter-1, ppu.scanlineCounter, ppu.FetchColor(paletteEntry))
+				ppu.funcPushPixel(ppu.tickCounter-1, ppu.scanlineCounter, ppu.FetchColor(pixelData))
 			}
 		}
 
@@ -365,6 +383,61 @@ func (ppu *Ppu) Emulate(cycles int) {
 		}
 
 		cycles_left--
+	}
+}
+
+func (ppu *Ppu) fetchTileData() {
+	// run on (_ % 8 == 1) ticks in prerender and render scanlines
+	// we need to fetch a tile AND the attribute data, combine them, and
+	// shove them onto our queue of uh, stuff
+	nametableAddress := 0x2000 | (ppu.v & 0x0FFF)
+	nametableData := ppu.mem.Read(address(nametableAddress))
+	attributeAddress := 0x23C0 | (ppu.v & 0x0C00) | ((ppu.v >> 4) & 0x38) | ((ppu.v >> 2) & 0x07)
+	attributeData := ppu.mem.Read(address(attributeAddress))
+	// process attribute data to select correct tile
+	attributeData = ((attributeData >> (((ppu.v >> 4) & 4) | (ppu.v & 2))) & 3) << 2
+
+	var patternAddr address = 0
+	patternAddr |= address((ppu.v >> 12) & 0x3)
+	patternAddr |= address(nametableData) << 4
+	patternAddr |= address(ppu.flag_spriteTableAddress) << 12
+	patternLo, patternHi := ppu.mem.Read(patternAddr), ppu.mem.Read(patternAddr+8)
+
+	var bitmap uint32 = 0
+	for i := 0; i < 8; i++ {
+		// shift on the data
+		pixelData := attributeData | ((patternLo & 0x80) >> 7) | ((patternHi & 0x80) >> 6)
+		patternLo <<= 1
+		patternHi <<= 1
+		bitmap = (bitmap << 4) | uint32(pixelData)
+	}
+	ppu.backgroundBitmapData |= uint64(bitmap)
+}
+
+func (ppu *Ppu) incrementScrollY() {
+	if ppu.v&0x7000 != 0x7000 {
+		ppu.v += 0x1000
+	} else {
+		ppu.v &= 0x8FFF
+		y := (ppu.v & 0x03E0) >> 5
+		if y == 29 {
+			y = 0
+			ppu.v ^= 0x0800
+		} else if y == 31 {
+			y = 0
+		} else {
+			y += 1
+		}
+		ppu.v = (ppu.v & 0xFC1F) | (y << 5)
+	}
+}
+
+func (ppu *Ppu) incrementScrollX() {
+	if ppu.v&0x001F == 31 {
+		ppu.v &= 0xFFE0
+		ppu.v ^= 0x0400
+	} else {
+		ppu.v += 1
 	}
 }
 

@@ -156,7 +156,7 @@ func sdlCleanup() {
 
 func main() {
 	fmt.Println("aeNES")
-	romPath := "roms/Metroid.nes"
+	romPath := "roms/Donkey Kong.nes"
 	fmt.Println("loading", romPath)
 
 	referenceLogFile, err := os.Open(romPath + ".debug")
