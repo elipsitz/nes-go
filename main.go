@@ -61,6 +61,8 @@ var debugTexture *sdl.Texture
 
 var nes *Nes
 var debug int
+var framesRendered int
+var fpsTimer time.Time
 
 const debugNumScreens = 2
 const scale = 2
@@ -84,12 +86,15 @@ func sdlInit() {
 	debugTexture.SetBlendMode(sdl.BLENDMODE_BLEND)
 
 	debugRenderer.SetScale(scale, scale)
+	fpsTimer = time.Now()
 }
 
 func sdlLoop() {
 	var event sdl.Event
 	running := true
 	for running {
+		frameStart := time.Now()
+
 		for event = sdl.PollEvent(); event != nil; event = sdl.PollEvent() {
 			switch t := event.(type) {
 			case *sdl.QuitEvent:
@@ -139,15 +144,20 @@ func sdlLoop() {
 			}
 		}
 
-		timeStart := time.Now()
 		nes.EmulateFrame()
-		timeEnd := time.Now()
-		frameTime := timeEnd.Sub(timeStart)
-		// desired frame time = 16.66ms = 16666667 nanoseconds
-		// fmt.Printf("Frame in: %dms\n", frameTime.Nanoseconds() / 1000000)
+		frameTime := time.Now().Sub(frameStart)
 		delay := (16666667 - frameTime.Nanoseconds()) / 1000000
 		if delay > 0 {
 			sdl.Delay(uint32(delay))
+		}
+
+		framesRendered += 1
+		timeSpent := time.Now().Sub(fpsTimer)
+		if timeSpent.Seconds() > 1 {
+			fps := float64(framesRendered) / timeSpent.Seconds()
+			fpsTimer = time.Now()
+			framesRendered = 0
+			window.SetTitle(fmt.Sprintf("aeNes - FPS: %d", int(fps)))
 		}
 	}
 }
