@@ -370,6 +370,8 @@ func (ppu *Ppu) Emulate(cycles int) {
 			// fetching tile data
 			if ppu.scanlineCounter < 240 {
 				if (ppu.tickCounter >= 1 && ppu.tickCounter <= 256) || (ppu.tickCounter >= 321 && ppu.tickCounter <= 336) {
+					ppu.backgroundBitmapData <<= 4
+
 					if ppu.tickCounter%8 == 0 {
 						ppu.fetchTileData()
 					}
@@ -410,7 +412,6 @@ func (ppu *Ppu) renderPixel() {
 
 	// background pixel
 	backgroundPixel := byte(ppu.backgroundBitmapData >> (32 + ((7 - ppu.x) * 4)) & 0xF)
-	ppu.backgroundBitmapData <<= 4
 
 	// sprite pixel
 	var spritePixel byte = 0
@@ -489,6 +490,7 @@ func (ppu *Ppu) fetchTileData() {
 		patternHi <<= 1
 		bitmap = (bitmap << 4) | uint32(pixelData)
 	}
+
 	ppu.backgroundBitmapData |= uint64(bitmap)
 }
 

@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"github.com/veandco/go-sdl2/sdl"
 	"os"
+	"reflect"
 	"time"
 	"unsafe"
-	"reflect"
 )
 
 func check(e error) {
