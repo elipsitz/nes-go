@@ -21,7 +21,8 @@ func NewNes(romPath string) *Nes {
 		cartridge: LoadCartridge(romPath),
 	}
 	a, b, c := nes.cartridge.CRC32()
-	fmt.Printf("CRC32: %.8X, %.8X, %.8X", a, b, c)
+	fmt.Printf("CRC32: %.8X, %.8X, %.8X\n", a, b, c)
+	fmt.Printf("Mapper ID: %d\n", nes.cartridge.mapperID)
 	nes.cpu = NewCpu(&nes)
 	nes.ppu = NewPpu(&nes)
 	nes.mapper = NewMapper(&nes)

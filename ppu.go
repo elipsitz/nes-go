@@ -29,6 +29,9 @@ type Ppu struct {
 	flag_sprite0Hit     byte
 	flag_spriteOverflow byte
 
+	// etc.
+	ppuDataBuffer byte
+
 	// scrolling / internal registers
 	ppuLatch             byte
 	v                    uint16
@@ -78,9 +81,9 @@ func NewPpu(nes *Nes) *Ppu {
 		nes:             nes,
 		mem:             &PPUMemory{nes: nes},
 		warmupRemaining: 29658 * 3,
-		scanlineCounter: -1, // counts scanlines in a frame ( https://wiki.nesdev.com/w/index.php/PPU_rendering#Line-by-line_timing )
-		tickCounter:     0,  // counts clock cycle ticks in a scanline
-		frameCounter:    0,  // counts total frames (vblanks)
+		scanlineCounter: 0, // counts scanlines in a frame ( https://wiki.nesdev.com/w/index.php/PPU_rendering#Line-by-line_timing )
+		tickCounter:     0, // counts clock cycle ticks in a scanline
+		frameCounter:    0, // counts total frames (vblanks)
 
 		flag_vBlank: 0,
 		colors:      [64]color{84*256*256 + 84*256 + 84, 0*256*256 + 30*256 + 116, 8*256*256 + 16*256 + 144, 48*256*256 + 0*256 + 136, 68*256*256 + 0*256 + 100, 92*256*256 + 0*256 + 48, 84*256*256 + 4*256 + 0, 60*256*256 + 24*256 + 0, 32*256*256 + 42*256 + 0, 8*256*256 + 58*256 + 0, 0*256*256 + 64*256 + 0, 0*256*256 + 60*256 + 0, 0*256*256 + 50*256 + 60, 0*256*256 + 0*256 + 0, 0*256*256 + 0*256 + 0, 0*256*256 + 0*256 + 0, 152*256*256 + 150*256 + 152, 8*256*256 + 76*256 + 196, 48*256*256 + 50*256 + 236, 92*256*256 + 30*256 + 228, 136*256*256 + 20*256 + 176, 160*256*256 + 20*256 + 100, 152*256*256 + 34*256 + 32, 120*256*256 + 60*256 + 0, 84*256*256 + 90*256 + 0, 40*256*256 + 114*256 + 0, 8*256*256 + 124*256 + 0, 0*256*256 + 118*256 + 40, 0*256*256 + 102*256 + 120, 0*256*256 + 0*256 + 0, 0*256*256 + 0*256 + 0, 0*256*256 + 0*256 + 0, 236*256*256 + 238*256 + 236, 76*256*256 + 154*256 + 236, 120*256*256 + 124*256 + 236, 176*256*256 + 98*256 + 236, 228*256*256 + 84*256 + 236, 236*256*256 + 88*256 + 180, 236*256*256 + 106*256 + 100, 212*256*256 + 136*256 + 32, 160*256*256 + 170*256 + 0, 116*256*256 + 196*256 + 0, 76*256*256 + 208*256 + 32, 56*256*256 + 204*256 + 108, 56*256*256 + 180*256 + 204, 60*256*256 + 60*256 + 60, 0*256*256 + 0*256 + 0, 0*256*256 + 0*256 + 0, 236*256*256 + 238*256 + 236, 168*256*256 + 204*256 + 236, 188*256*256 + 188*256 + 236, 212*256*256 + 178*256 + 236, 236*256*256 + 174*256 + 236, 236*256*256 + 174*256 + 212, 236*256*256 + 180*256 + 176, 228*256*256 + 196*256 + 144, 204*256*256 + 210*256 + 120, 180*256*256 + 222*256 + 120, 168*256*256 + 226*256 + 144, 152*256*256 + 226*256 + 180, 160*256*256 + 214*256 + 228, 160*256*256 + 162*256 + 160, 0*256*256 + 0*256 + 0, 0*256*256 + 0*256 + 0},
@@ -107,7 +110,16 @@ func (ppu *Ppu) ReadRegister(register int) byte {
 		// XXX increment after read during rendering?
 	case 7:
 		// PPUDATA
-		data := ppu.mem.Read(address(ppu.v))
+		var data byte
+		if ppu.v <= 0x3EFF {
+			// buffer this read
+			data = ppu.mem.Read(address(ppu.v))
+			ppu.ppuDataBuffer, data = data, ppu.ppuDataBuffer
+		} else {
+			ppu.ppuDataBuffer = ppu.mem.Read(address(ppu.v - 0x1000))
+		}
+
+		// fmt.Printf("read PPUDATA: $%.4X (got $%.2X) | PC: $%.4X\n", ppu.v, data, nes.cpu.PC)
 		if ppu.flag_incrementVram == 0 {
 			ppu.v += 1
 		} else {
@@ -174,8 +186,10 @@ func (ppu *Ppu) WriteRegister(register int, data byte) {
 			ppu.v = ppu.t
 			ppu.w = 0
 		}
+		// fmt.Printf("PPUADDR : %.2X   %d  = (%.4X) %.4X (via %.4X)\n", data, ppu.w, ppu.t, ppu.v, nes.cpu.PC)
 	case 7:
 		// PPUDATA
+		//fmt.Printf("PPUDATA : %.2X  %d\n", data, ppu.flag_incrementVram)
 		ppu.mem.Write(address(ppu.v), data)
 		if ppu.flag_incrementVram == 0 {
 			ppu.v += 1
@@ -184,7 +198,11 @@ func (ppu *Ppu) WriteRegister(register int, data byte) {
 		}
 	case 0x4014:
 		// OAMDMA
-		// TODO suspend CPU for 513-514 cycles
+		nes.cpu.suspended = 513
+		if nes.cpu.totalCycles%2 == 1 {
+			nes.cpu.suspended += 1
+		}
+
 		addr := address(data) << 8
 		for i := 0; i < 256; i++ {
 			addr2 := addr + address(i)
@@ -219,7 +237,7 @@ func (ppu *Ppu) Emulate(cycles int) {
 				// prerender
 				ppu.flag_sprite0Hit = 0
 				ppu.flag_vBlank = 0
-				ppu.flag_spriteOverflow = 1
+				ppu.flag_spriteOverflow = 0
 				ppu.status_rendering = true
 			}
 			if ppu.tickCounter == 304 && renderingEnabled {

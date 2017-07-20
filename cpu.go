@@ -22,7 +22,9 @@ type Cpu struct {
 	status_V bool // Overflow
 	status_N bool // negative
 
+	totalCycles      uint64
 	pendingInterrupt int
+	suspended        int
 }
 
 func NewCpu(nes *Nes) *Cpu {
@@ -192,6 +194,11 @@ func (cpu *Cpu) triggerInterruptIRQ() {
 func (cpu *Cpu) Emulate(cycles int) int {
 	cycles_left := cycles
 	for cycles_left > 0 {
+		if cpu.suspended > 0 {
+			cpu.suspended--
+			continue
+		}
+
 		switch cpu.pendingInterrupt {
 		case interruptNMI:
 			cpu.handleInterrupt(cpu.getVectorNMI())
@@ -202,11 +209,11 @@ func (cpu *Cpu) Emulate(cycles int) int {
 
 		opcode := cpu.mem.Read(cpu.PC)
 
-		logline(fmt.Sprintf("%.4X  %.2X________________________________________A:%.2X X:%.2X Y:%.2X P:%.2X SP:%.2X CYC:__________", cpu.PC, opcode, cpu.A, cpu.X, cpu.Y, cpu.statusPack(false), cpu.SP))
+		logline(fmt.Sprintf("%.4X  %.2X________________________________________A:%.2X X:%.2X Y:%.2X P:%.2X SP:%.2X ______________ %d %d", cpu.PC, opcode, cpu.A, cpu.X, cpu.Y, cpu.statusPack(false), cpu.SP, nes.ppu.tickCounter, nes.ppu.scanlineCounter))
 
-		if cpu.PC == 0xEC5B {
+		if cpu.PC == 0x8EDD {
 			// this is where the blarggg test rom fails
-			//time.Sleep(10000000)
+			// time.Sleep(100000000)
 			//panic("fail")
 		}
 
@@ -755,5 +762,7 @@ func (cpu *Cpu) Emulate(cycles int) int {
 		panic(fmt.Sprintf("Unknown Opcode at $%.4X $%.2X", cpu.PC, opcode))
 	}
 
-	return cycles - cycles_left
+	cyclesThisTick := cycles - cycles_left
+	cpu.totalCycles += uint64(cyclesThisTick)
+	return cyclesThisTick
 }

@@ -1,5 +1,7 @@
 package main
 
+import "fmt"
+
 type MapperMMC0 struct {
 	nes *Nes
 }
@@ -33,6 +35,7 @@ func (m *MapperMMC0) Read(addr address) byte {
 func (m *MapperMMC0) Write(addr address, data byte) {
 	switch {
 	case addr <= 0x1FFF:
+		fmt.Printf("$%.4X : %.2X | AT $%.4X  ---------------------------\n", addr, data, nes.cpu.PC)
 		m.nes.cartridge.chr[addr] = data // if RAM
 	case addr <= 0x2FFF:
 		m.nes.ppu.vram[TranslateVRamAddress(addr, m.nes.cartridge.mirrorMode)] = data

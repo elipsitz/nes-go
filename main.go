@@ -19,7 +19,7 @@ var referenceLog *bufio.Scanner
 var referenceLogBegan bool
 
 func logline(line string) {
-	//fmt.Println(line)
+	// fmt.Println(line)
 	return
 	if referenceLog != nil {
 		if len(referenceLogLine) == 0 {
@@ -28,7 +28,7 @@ func logline(line string) {
 		}
 		// fmt.Println(referenceLogLine)
 		// fmt.Println(line)
-		for i := 0; i < len(line); i++ {
+		for i := 0; i < len(line) && i < len(referenceLogLine); i++ {
 			if line[i] != referenceLogLine[i] && line[i] != '_' {
 				if !referenceLogBegan {
 					return
@@ -123,6 +123,14 @@ func sdlLoop() {
 					nes.controller1.buttons[ButtonB] = false
 				case sdl.SCANCODE_GRAVE:
 					debug = (debug + 1) % (debugNumScreens + 1)
+				case sdl.SCANCODE_TAB:
+					for y := 0; y < 30; y++ {
+						for x := 0; x < 32; x++ {
+							fmt.Printf("%.2X ", nes.ppu.mem.Read(0x2000+address(y*32)+address(x)))
+						}
+						fmt.Printf("\n")
+					}
+					sdl.Delay(100000000)
 				}
 			}
 		}
@@ -193,7 +201,8 @@ func sdlCleanup() {
 
 func main() {
 	fmt.Println("aeNES")
-	romPath := "roms/Legend of Zelda, The.nes"
+	romPath := "roms/Super Mario Bros.nes"
+	// romPath := "roms/test/test_ppu_read_buffer.nes"
 	fmt.Println("loading", romPath)
 
 	referenceLogFile, err := os.Open(romPath + ".debug")
