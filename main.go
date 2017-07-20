@@ -6,6 +6,8 @@ import (
 	"github.com/veandco/go-sdl2/sdl"
 	"os"
 	"time"
+	"unsafe"
+	"reflect"
 )
 
 func check(e error) {
@@ -49,29 +51,39 @@ func logline(line string) {
 	}
 }
 
-var surface *sdl.Surface
 var window *sdl.Window
+var windowRenderer *sdl.Renderer
+var windowTexture *sdl.Texture
+var buffer [w * h]uint32
 var debugSurface *sdl.Surface
 var debugRenderer *sdl.Renderer
+var debugTexture *sdl.Texture
 
 var nes *Nes
 var debug int
-var debugNumScreens int = 2
+
+const debugNumScreens = 2
+const scale = 2
+const w = 256
+const h = 240
 
 func sdlInit() {
 	var err error
 	sdl.Init(sdl.INIT_EVERYTHING)
-	window, err = sdl.CreateWindow("aeNES", sdl.WINDOWPOS_UNDEFINED, sdl.WINDOWPOS_UNDEFINED, 256, 240, sdl.WINDOW_SHOWN)
+
+	window, windowRenderer, err = sdl.CreateWindowAndRenderer(w*scale, h*scale, 0)
+	check(err)
+	windowTexture, err = windowRenderer.CreateTexture(sdl.PIXELFORMAT_ARGB8888, sdl.TEXTUREACCESS_STREAMING, w, h)
 	check(err)
 
-	surface, err = window.GetSurface()
+	debugSurface, err = sdl.CreateRGBSurface(0, w*scale, h*scale, 32, 0x00ff0000, 0x0000ff00, 0x000000ff, 0xff000000)
 	check(err)
-
-	debugSurface, err = sdl.CreateRGBSurface(0, 256, 240, 32, 0xff000000, 0x00ff0000, 0x0000ff00, 0x000000ff)
-	check(err)
-
 	debugRenderer, err = sdl.CreateSoftwareRenderer(debugSurface)
 	check(err)
+	debugTexture, err = windowRenderer.CreateTexture(sdl.PIXELFORMAT_ARGB8888, sdl.TEXTUREACCESS_STREAMING, w*scale, h*scale)
+	debugTexture.SetBlendMode(sdl.BLENDMODE_BLEND)
+
+	debugRenderer.SetScale(scale, scale)
 }
 
 func sdlLoop() {
@@ -123,14 +135,6 @@ func sdlLoop() {
 					nes.controller1.buttons[ButtonB] = false
 				case sdl.SCANCODE_GRAVE:
 					debug = (debug + 1) % (debugNumScreens + 1)
-				case sdl.SCANCODE_TAB:
-					for y := 0; y < 30; y++ {
-						for x := 0; x < 32; x++ {
-							fmt.Printf("%.2X ", nes.ppu.mem.Read(0x2000+address(y*32)+address(x)))
-						}
-						fmt.Printf("\n")
-					}
-					sdl.Delay(100000000)
 				}
 			}
 		}
@@ -149,15 +153,10 @@ func sdlLoop() {
 }
 
 func pushPixel(x int, y int, col color) {
-	pixels := surface.Pixels()
-	pixels[4*(y*int(surface.W)+x)+0] = byte(col >> 0)
-	pixels[4*(y*int(surface.W)+x)+1] = byte(col >> 8)
-	pixels[4*(y*int(surface.W)+x)+2] = byte(col >> 16)
-	pixels[4*(y*int(surface.W)+x)+3] = byte(col >> 24)
-
+	buffer[y*w+x] = uint32(col)
 }
 
-func pushFrame() {
+func drawDebug() {
 	if debug > 0 {
 		if debug == 1 {
 			debugRenderer.SetDrawColor(0, 255, 0, 255)
@@ -187,11 +186,20 @@ func pushFrame() {
 			}
 		}
 
-		debugSurface.Blit(nil, surface, nil)
+		pixels := debugSurface.Pixels()
+		hdr := (*reflect.SliceHeader)(unsafe.Pointer(&pixels))
+		debugTexture.Update(nil, unsafe.Pointer(hdr.Data), 4*w*scale)
+		windowRenderer.Copy(debugTexture, nil, nil)
+		debugSurface.FillRect(nil, 0x00000000)
 	}
+}
 
-	window.UpdateSurface()
-	debugSurface.FillRect(nil, 0x00000000)
+func pushFrame() {
+	// https://wiki.libsdl.org/MigrationGuide#If_your_game_just_wants_to_get_fully-rendered_frames_to_the_screen
+	windowTexture.Update(nil, unsafe.Pointer(&buffer), 4*w)
+	windowRenderer.Copy(windowTexture, nil, nil)
+	drawDebug()
+	windowRenderer.Present()
 }
 
 func sdlCleanup() {
@@ -201,8 +209,8 @@ func sdlCleanup() {
 
 func main() {
 	fmt.Println("aeNES")
-	// romPath := "roms/Super Mario Bros.nes"
-	romPath := "roms/test/test_cpu_exec_space_ppuio.nes"
+	romPath := "roms/Super Mario Bros.nes"
+	// romPath := "roms/test/test_cpu_exec_space_ppuio.nes"
 	fmt.Println("loading", romPath)
 
 	referenceLogFile, err := os.Open(romPath + ".debug")
