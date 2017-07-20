@@ -247,6 +247,11 @@ func (ppu *Ppu) Emulate(cycles int) {
 			}
 			if ppu.tickCounter >= 65 && ppu.tickCounter <= 256 {
 				// Sprite Evaluation Stage 2: Loading the Secondary OAM
+				spriteHeight := byte(8)
+				if ppu.flag_spriteSize != 0 {
+					spriteHeight = 16
+				}
+
 				if ppu.spriteEvaluationN < 64 && ppu.pendingNumScanlineSprites < 8 {
 					if ppu.tickCounter%2 == 1 {
 						// read from primary
@@ -256,7 +261,7 @@ func (ppu *Ppu) Emulate(cycles int) {
 						ppu.secondary_oam[4*ppu.pendingNumScanlineSprites+ppu.spriteEvaluationM] = ppu.spriteEvaluationRead
 						if ppu.spriteEvaluationM == 0 {
 							// check to see if it's in range
-							if byte(ppu.scanlineCounter) >= ppu.spriteEvaluationRead && byte(ppu.scanlineCounter) < ppu.spriteEvaluationRead+8 {
+							if byte(ppu.scanlineCounter) >= ppu.spriteEvaluationRead && byte(ppu.scanlineCounter) < ppu.spriteEvaluationRead+spriteHeight {
 								// it's in range!
 							} else {
 								// not in range.
@@ -294,9 +299,22 @@ func (ppu *Ppu) Emulate(cycles int) {
 					}
 					ppu.spriteXPositions[ppu.spriteEvaluationN], ppu.spriteAttributes[ppu.spriteEvaluationN] = int(xpos), attribute
 
-					// TODO support 8x16 sprites
-					// fetch bitmap data into shift registers
+					spriteTable := ppu.flag_spriteTableAddress
 					tileRow := ppu.scanlineCounter - int(ypos)
+
+					if ppu.flag_spriteSize != 0 {
+						// 8x16 sprites
+						spriteTable = tile & 0x0
+						tile = tile & 0xFE
+						if tileRow >= 8 {
+							tile |= 1 - (attribute & 0x80 >> 7)
+							tileRow += 8
+						} else {
+							tile |= attribute & 0x80 >> 7
+						}
+					}
+
+					// fetch bitmap data into shift registers
 					if attribute&0x80 > 0 {
 						// flip sprite vertically
 						tileRow = 7 - tileRow
@@ -304,7 +322,7 @@ func (ppu *Ppu) Emulate(cycles int) {
 					var patternAddr address = 0
 					patternAddr |= address(tileRow)
 					patternAddr |= address(tile) << 4
-					patternAddr |= address(ppu.flag_spriteTableAddress) << 12
+					patternAddr |= address(spriteTable) << 12
 					lo, hi := ppu.mem.Read(patternAddr), ppu.mem.Read(patternAddr+8)
 
 					if attribute&0x40 > 0 {

@@ -193,7 +193,7 @@ func sdlCleanup() {
 
 func main() {
 	fmt.Println("aeNES")
-	romPath := "roms/test/test_cpu_official_only.nes"
+	romPath := "roms/Legend of Zelda, The.nes"
 	fmt.Println("loading", romPath)
 
 	referenceLogFile, err := os.Open(romPath + ".debug")
