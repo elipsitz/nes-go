@@ -324,6 +324,7 @@ func (cpu *Cpu) Emulate(cycles int) int {
 		case 0x00:
 			// BRK - Force Interrupt
 			returnAddr := cpu.PC + 2
+			cpu.mem.Read(cpu.PC + 1) // dummy read
 			cpu.stackPush(byte((returnAddr >> 8) & 0xFF))
 			cpu.stackPush(byte(returnAddr & 0xFF))
 			cpu.stackPush(cpu.statusPack(true))
@@ -340,11 +341,13 @@ func (cpu *Cpu) Emulate(cycles int) int {
 			cpu.PC = addr
 		case 0x40:
 			// RTI - Return from Interrupt
+			cpu.mem.Read(cpu.PC + 1) // dummy read
 			cpu.statusUnpack(cpu.stackPull())
 			cpu.PC = address(cpu.stackPull()) + address(cpu.stackPull())*256
 			cycles_left -= 6
 		case 0x60:
 			// RTS - Return from Subroutine
+			cpu.mem.Read(cpu.PC + 1) // dummy read
 			cpu.PC = (address(cpu.stackPull()) + address(cpu.stackPull())*256) + 1
 			cycles_left -= 6
 		case 0x08:
