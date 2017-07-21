@@ -69,6 +69,8 @@ const scale = 2
 const w = 256
 const h = 240
 
+var paused bool
+
 func sdlInit() {
 	var err error
 	sdl.Init(sdl.INIT_EVERYTHING)
@@ -99,8 +101,6 @@ func sdlLoop() {
 			switch t := event.(type) {
 			case *sdl.QuitEvent:
 				running = false
-			case *sdl.MouseMotionEvent:
-				// fmt.Printf("[%d ms] MouseMotion\ttype:%d\tid:%d\tx:%d\ty:%d\txrel:%d\tyrel:%d\n", t.Timestamp, t.Type, t.Which, t.X, t.Y, t.XRel, t.YRel)
 			case *sdl.KeyDownEvent:
 				switch t.Keysym.Scancode {
 				case sdl.SCANCODE_RETURN:
@@ -140,11 +140,21 @@ func sdlLoop() {
 					nes.controller1.buttons[ButtonB] = false
 				case sdl.SCANCODE_GRAVE:
 					debug = (debug + 1) % (debugNumScreens + 1)
+				case sdl.SCANCODE_SPACE:
+					paused = !paused
+					if paused {
+						fmt.Println("Paused.")
+					} else {
+						fmt.Println("Unpaused.")
+					}
 				}
 			}
 		}
 
-		nes.EmulateFrame()
+		if !paused {
+			nes.EmulateFrame()
+		}
+
 		frameTime := time.Now().Sub(frameStart)
 		delay := (16666667 - frameTime.Nanoseconds()) / 1000000
 		if delay > 0 {
@@ -219,7 +229,7 @@ func sdlCleanup() {
 
 func main() {
 	fmt.Println("aeNES")
-	romPath := "roms/Super Mario Bros.nes"
+	romPath := "roms/Legend of Zelda, The.nes"
 	// romPath := "roms/test/test_cpu_exec_space_ppuio.nes"
 	fmt.Println("loading", romPath)
 

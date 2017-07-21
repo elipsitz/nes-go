@@ -225,6 +225,18 @@ func (ppu *Ppu) Emulate(cycles int) {
 			}
 		}
 
+		if ppu.scanlineCounter == 241 && ppu.tickCounter == 1 {
+			// VBLANK
+			ppu.funcPushFrame()
+			if ppu.flag_generateNMIs == 1 {
+				ppu.nes.cpu.triggerInterruptNMI()
+			}
+			ppu.flag_vBlank = 1
+			ppu.frameCounter += 1
+			ppu.status_rendering = false
+		}
+		cycles_left--
+
 		renderingEnabled := ppu.flag_renderBackground != 0 || ppu.flag_renderSprites != 0
 
 		if ppu.scanlineCounter == -1 {
@@ -385,19 +397,6 @@ func (ppu *Ppu) Emulate(cycles int) {
 				ppu.incrementScrollX()
 			}
 		}
-
-		if ppu.scanlineCounter == 241 && ppu.tickCounter == 1 {
-			// VBLANK
-			ppu.funcPushFrame()
-			if ppu.flag_generateNMIs == 1 {
-				ppu.nes.cpu.triggerInterruptNMI()
-			}
-			ppu.flag_vBlank = 1
-			ppu.frameCounter += 1
-			ppu.status_rendering = false
-		}
-
-		cycles_left--
 	}
 }
 
@@ -411,7 +410,7 @@ func (ppu *Ppu) renderPixel() {
 	var spritePixel byte = 0
 	var spriteIndex = 0
 	for n := 0; n < ppu.numScanlineSprites; n++ {
-		offset := (ppu.tickCounter - 1) - int(ppu.spriteXPositions[n])
+		offset := x - int(ppu.spriteXPositions[n])
 		if offset >= 0 && offset < 8 {
 			attributes := ppu.spriteAttributes[n]
 			data := ((ppu.spriteBitmapDataHi[n] & 0x80) >> 6) | ((ppu.spriteBitmapDataLo[n] & 0x80) >> 7)
