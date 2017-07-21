@@ -228,11 +228,6 @@ func (ppu *Ppu) Emulate(cycles int) {
 		renderingEnabled := ppu.flag_renderBackground != 0 || ppu.flag_renderSprites != 0
 
 		if ppu.scanlineCounter == -1 {
-			if ppu.tickCounter == 0 {
-				if ppu.frameCounter%2 == 1 {
-					ppu.tickCounter++
-				}
-			}
 			if ppu.tickCounter == 1 {
 				// prerender
 				ppu.flag_sprite0Hit = 0
@@ -322,7 +317,7 @@ func (ppu *Ppu) Emulate(cycles int) {
 
 					if ppu.flag_spriteSize != 0 {
 						// 8x16 sprites
-						spriteTable = tile & 0x0
+						spriteTable = tile & 0x1
 						tile = tile & 0xFE
 						if tileRow >= 8 {
 							tile |= 1 - (attribute & 0x80 >> 7)
@@ -357,7 +352,6 @@ func (ppu *Ppu) Emulate(cycles int) {
 
 					ppu.spriteBitmapDataLo[ppu.spriteEvaluationN] = lo
 					ppu.spriteBitmapDataHi[ppu.spriteEvaluationN] = hi
-					// TODO just load transparent sprite if there are fewer than 8
 				}
 			}
 			/* ***** END SPRITE EVALUATION ***** */
