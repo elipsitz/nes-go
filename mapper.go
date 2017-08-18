@@ -15,6 +15,8 @@ func NewMapper(nes *Nes) Mapper {
 		return NewMapperMMC1(nes)
 	case 3:
 		return NewMapper3(nes)
+	case 4:
+		return NewMapperMMC3(nes)
 	default:
 		panic(fmt.Sprintf("Unknown mapper: %d", nes.cartridge.mapperID))
 	}
