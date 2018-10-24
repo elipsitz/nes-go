@@ -5,9 +5,7 @@ import (
 	"fmt"
 	"github.com/veandco/go-sdl2/sdl"
 	"os"
-	"reflect"
 	"time"
-	"unsafe"
 )
 
 func check(e error) {
@@ -54,7 +52,7 @@ func logline(line string) {
 var window *sdl.Window
 var windowRenderer *sdl.Renderer
 var windowTexture *sdl.Texture
-var buffer [w * h]uint32
+var buffer [w * h * 4]byte
 var debugSurface *sdl.Surface
 var debugRenderer *sdl.Renderer
 var debugTexture *sdl.Texture
@@ -101,51 +99,37 @@ func sdlLoop() {
 			switch t := event.(type) {
 			case *sdl.QuitEvent:
 				running = false
-			case *sdl.KeyDownEvent:
+			case *sdl.KeyboardEvent:
+				pressed := t.Type == sdl.KEYDOWN
 				switch t.Keysym.Scancode {
 				case sdl.SCANCODE_RETURN:
-					nes.controller1.buttons[ButtonStart] = true
+					nes.controller1.buttons[ButtonStart] = pressed
 				case sdl.SCANCODE_RSHIFT:
-					nes.controller1.buttons[ButtonSelect] = true
+					nes.controller1.buttons[ButtonSelect] = pressed
 				case sdl.SCANCODE_LEFT:
-					nes.controller1.buttons[ButtonLeft] = true
+					nes.controller1.buttons[ButtonLeft] = pressed
 				case sdl.SCANCODE_RIGHT:
-					nes.controller1.buttons[ButtonRight] = true
+					nes.controller1.buttons[ButtonRight] = pressed
 				case sdl.SCANCODE_UP:
-					nes.controller1.buttons[ButtonUp] = true
+					nes.controller1.buttons[ButtonUp] = pressed
 				case sdl.SCANCODE_DOWN:
-					nes.controller1.buttons[ButtonDown] = true
+					nes.controller1.buttons[ButtonDown] = pressed
 				case sdl.SCANCODE_Z:
-					nes.controller1.buttons[ButtonA] = true
+					nes.controller1.buttons[ButtonA] = pressed
 				case sdl.SCANCODE_X:
-					nes.controller1.buttons[ButtonB] = true
-				}
-			case *sdl.KeyUpEvent:
-				switch t.Keysym.Scancode {
-				case sdl.SCANCODE_RETURN:
-					nes.controller1.buttons[ButtonStart] = false
-				case sdl.SCANCODE_RSHIFT:
-					nes.controller1.buttons[ButtonSelect] = false
-				case sdl.SCANCODE_LEFT:
-					nes.controller1.buttons[ButtonLeft] = false
-				case sdl.SCANCODE_RIGHT:
-					nes.controller1.buttons[ButtonRight] = false
-				case sdl.SCANCODE_UP:
-					nes.controller1.buttons[ButtonUp] = false
-				case sdl.SCANCODE_DOWN:
-					nes.controller1.buttons[ButtonDown] = false
-				case sdl.SCANCODE_Z:
-					nes.controller1.buttons[ButtonA] = false
-				case sdl.SCANCODE_X:
-					nes.controller1.buttons[ButtonB] = false
+					nes.controller1.buttons[ButtonB] = pressed
 				case sdl.SCANCODE_GRAVE:
-					debug = (debug + 1) % (debugNumScreens + 1)
+					if !pressed {
+						debug = (debug + 1) % (debugNumScreens + 1)
+					}
 				case sdl.SCANCODE_SPACE:
-					paused = !paused
-					if paused {
-						fmt.Println("Paused.")
-					} else {
-						fmt.Println("Unpaused.")
+					if !pressed {
+						paused = !paused
+						if paused {
+							fmt.Println("Paused.")
+						} else {
+							fmt.Println("Unpaused.")
+						}
 					}
 				}
 			}
@@ -173,7 +157,10 @@ func sdlLoop() {
 }
 
 func pushPixel(x int, y int, col color) {
-	buffer[y*w+x] = uint32(col)
+	buffer[(y*w+x)*4+0] = byte((uint32(col) >> 0) & 0xFF)
+	buffer[(y*w+x)*4+1] = byte((uint32(col) >> 8) & 0xFF)
+	buffer[(y*w+x)*4+2] = byte((uint32(col) >> 16) & 0xFF)
+	buffer[(y*w+x)*4+3] = byte((uint32(col) >> 24) & 0xFF)
 }
 
 func drawDebug() {
@@ -201,14 +188,13 @@ func drawDebug() {
 					col := (((lo << uint(x%8)) & 0x80) >> 7) | (((hi << uint(x%8)) & 0x80) >> 6)
 					col += 1
 					debugRenderer.SetDrawColor(col*60, col*60, col*60, 255)
-					debugRenderer.DrawPoint(x, y)
+					debugRenderer.DrawPoint(int32(x), int32(y))
 				}
 			}
 		}
 
 		pixels := debugSurface.Pixels()
-		hdr := (*reflect.SliceHeader)(unsafe.Pointer(&pixels))
-		debugTexture.Update(nil, unsafe.Pointer(hdr.Data), 4*w*scale)
+		debugTexture.Update(nil, pixels, 4*w*scale)
 		windowRenderer.Copy(debugTexture, nil, nil)
 		debugSurface.FillRect(nil, 0x00000000)
 	}
@@ -216,7 +202,7 @@ func drawDebug() {
 
 func pushFrame() {
 	// https://wiki.libsdl.org/MigrationGuide#If_your_game_just_wants_to_get_fully-rendered_frames_to_the_screen
-	windowTexture.Update(nil, unsafe.Pointer(&buffer), 4*w)
+	windowTexture.Update(nil, buffer[:], 4*w)
 	windowRenderer.Copy(windowTexture, nil, nil)
 	drawDebug()
 	windowRenderer.Present()
@@ -229,7 +215,8 @@ func sdlCleanup() {
 
 func main() {
 	fmt.Println("aeNES")
-	romPath := "roms/Kirby's Adventure.nes"
+	// romPath := "roms/Kirby's Adventure.nes"
+	romPath := "roms/Legend of Zelda, The.nes"
 	// romPath := "roms/test/test_cpu_exec_space_ppuio.nes"
 	fmt.Println("loading", romPath)
 
