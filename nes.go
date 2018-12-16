@@ -8,6 +8,7 @@ type color uint32
 type Nes struct {
 	cpu         *Cpu
 	ppu         *Ppu
+	apu         *Apu
 	cartridge   *Cartridge
 	mapper      Mapper
 	controller1 *Controller
@@ -25,6 +26,7 @@ func NewNes(romPath string) *Nes {
 	fmt.Printf("Mapper ID: %d\n", nes.cartridge.mapperID)
 	nes.cpu = NewCpu(&nes)
 	nes.ppu = NewPpu(&nes)
+	nes.apu = NewApu(&nes)
 	nes.mapper = NewMapper(&nes)
 	nes.controller1 = NewController()
 	nes.controller2 = NewController()

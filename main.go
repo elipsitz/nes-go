@@ -216,7 +216,7 @@ func sdlCleanup() {
 func main() {
 	fmt.Println("aeNES")
 	// romPath := "roms/Kirby's Adventure.nes"
-	romPath := "roms/Legend of Zelda, The.nes"
+	romPath := "roms/Mega Man II.nes"
 	// romPath := "roms/test/test_cpu_exec_space_ppuio.nes"
 	fmt.Println("loading", romPath)
 
