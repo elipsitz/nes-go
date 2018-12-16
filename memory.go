@@ -25,7 +25,7 @@ func (*CPUMemory) Read(addr address) byte {
 	case addr == 0x4017:
 		return nes.controller2.Read()
 	case addr <= 0x4017:
-		// TODO NES APU and I/O REGISTERS
+		return nes.apu.ReadRegister(int(addr & 0xFF))
 	case addr <= 0x401F:
 		// CPU test mode
 	case addr >= 0x4020:
@@ -48,10 +48,11 @@ func (*CPUMemory) Write(addr address, data byte) {
 	case addr == 0x4016:
 		nes.controller1.Write(data)
 		nes.controller2.Write(data)
+	case addr <= 0x401F:
+		nes.apu.WriteRegister(int(addr&0xFF), data)
 	case addr >= 0x4020:
 		nes.mapper.Write(addr, data)
 	}
-	// TODO do the APU and I/O
 }
 
 type PPUMemory struct {
